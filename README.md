@@ -148,8 +148,7 @@ InterviewForge/
 │   ├── llm/
 │   └── vector_db/
 │
-├── docs/
-└── docker/
+
 ```
 
 ---
@@ -281,7 +280,7 @@ This project demonstrates:
 * Retrieval-Augmented Generation (RAG)
 * LLM Integration
 * System Design Principles
-* Docker & Deployment
+
 
 ---
 
