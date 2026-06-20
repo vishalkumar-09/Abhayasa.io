@@ -1,0 +1,38 @@
+server:
+  port: 8080
+  error:
+    include-message: always
+
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:interviewforge}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        use_sql_comments: true
+
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+# Custom application properties
+app:
+  jwt:
+    # 256-bit secret key for HMAC-SHA256 signing
+    secret: ${JWT_SECRET:9a4f2c8d3b7a1e5f8c3d6b2a1f4e7d9c0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d}
+    # 24 hours in milliseconds (24 * 60 * 60 * 1000)
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+  upload:
+    dir: ${UPLOAD_DIR:uploads/resumes}
+  ai-service:
+    url: ${AI_SERVICE_URL:http://localhost:8000}
