@@ -319,7 +319,13 @@ public class AiServiceClient {
     public TranscribeResponse transcribeAudio(org.springframework.web.multipart.MultipartFile file) {
         try {
             org.springframework.util.LinkedMultiValueMap<String, Object> body = new org.springframework.util.LinkedMultiValueMap<>();
-            body.add("file", file.getResource());
+            org.springframework.core.io.ByteArrayResource fileResource = new org.springframework.core.io.ByteArrayResource(file.getBytes()) {
+                @Override
+                public String getFilename() {
+                    return file.getOriginalFilename() != null ? file.getOriginalFilename() : "speech.webm";
+                }
+            };
+            body.add("file", fileResource);
 
             return restClient.post()
                     .uri("/api/v1/transcribe-audio")

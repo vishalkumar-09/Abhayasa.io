@@ -329,6 +329,9 @@ export default function LiveInterviewPage() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
 
+  const hasWebSpeechTranscribedRef = useRef<boolean>(false);
+  const [isTranscribingAudio, setIsTranscribingAudio] = useState(false);
+
   // Initialize SpeechRecognition on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -336,7 +339,8 @@ export default function LiveInterviewPage() {
         (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (SpeechRecognition) {
         const recog = new SpeechRecognition();
-        recog.continuous = true;
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        recog.continuous = !isMobile;
         recog.interimResults = true;
         recog.lang = "en-US";
 
@@ -344,6 +348,9 @@ export default function LiveInterviewPage() {
           let spoken = "";
           for (let i = 0; i < event.results.length; i++) {
             spoken += event.results[i][0].transcript;
+          }
+          if (spoken.trim()) {
+            hasWebSpeechTranscribedRef.current = true;
           }
           const base = baseAnswerTextRef.current;
           const updated = base ? base.trim() + " " + spoken.trim() : spoken.trim();
@@ -363,7 +370,6 @@ export default function LiveInterviewPage() {
         };
 
         recog.onend = () => {
-          // If candidate is still in recording mode, restart recognition instantly for fast continuous dictation
           if (isRecordingRef.current) {
             try { recog.start(); } catch (e) {}
           } else {
@@ -435,6 +441,7 @@ export default function LiveInterviewPage() {
 
   const startRecording = async () => {
     setErrorMsg(null);
+    hasWebSpeechTranscribedRef.current = false;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       setAudioStream(stream);
@@ -457,8 +464,9 @@ export default function LiveInterviewPage() {
       };
 
       recorder.onstop = async () => {
-        // Fallback audio transcription via Gemini only if browser Web Speech API is unavailable
-        if (!recognition && audioChunksRef.current.length > 0) {
+        // Fallback audio transcription via Gemini if browser Web Speech API produced no text or is unsupported on mobile
+        if ((!hasWebSpeechTranscribedRef.current || !recognition) && audioChunksRef.current.length > 0) {
+          setIsTranscribingAudio(true);
           const blobType = recorder.mimeType || "audio/webm";
           const audioBlob = new Blob(audioChunksRef.current, { type: blobType });
           const formData = new FormData();
@@ -470,10 +478,19 @@ export default function LiveInterviewPage() {
             });
             if (res.data?.transcript && res.data.transcript.trim()) {
               const text = res.data.transcript.trim();
-              setAnswerText((prev) => (prev ? prev + " " + text : text));
+              if (isCodingMode) {
+                setCodeContent((prev) => {
+                  const baseCode = prev.split("\n// Spoken explanation:")[0];
+                  return baseCode.trim() + `\n// Spoken explanation: ${text}`;
+                });
+              } else {
+                setAnswerText((prev) => (prev ? prev.trim() + " " + text : text));
+              }
             }
           } catch (err) {
             console.error("Audio transcription error:", err);
+          } finally {
+            setIsTranscribingAudio(false);
           }
         }
       };
@@ -1157,7 +1174,16 @@ export default function LiveInterviewPage() {
                     <div className="flex items-center gap-3 py-1 px-2.5 rounded-lg bg-violet-900/10 border border-violet-500/20 w-fit animate-pulse">
                       <span className="h-2 w-2 rounded-full bg-violet-400 animate-ping" />
                       <span className="text-[10px] text-violet-300 font-medium">
-                        Transcribing live microphone input...
+                        Listening to microphone input...
+                      </span>
+                    </div>
+                  )}
+
+                  {isTranscribingAudio && (
+                    <div className="flex items-center gap-3 py-1 px-2.5 rounded-lg bg-violet-900/20 border border-violet-500/30 w-fit animate-pulse">
+                      <Loader2 className="h-3 w-3 text-violet-400 animate-spin" />
+                      <span className="text-[10px] text-violet-300 font-medium">
+                        Transcribing audio via AI...
                       </span>
                     </div>
                   )}
