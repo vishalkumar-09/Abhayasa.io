@@ -1,20 +1,14 @@
 import logging
 import json
-import google.generativeai as genai
 from app.core.settings import settings
 from app.schemas.report import ReportGenerationRequest, ReportGenerationResponse
-from app.llm.gemini_client import resilient_generate_content
+from app.llm.langchain_client import langchain_client
 
 logger = logging.getLogger("app")
 
 class ReportGeneratorService:
     def __init__(self):
-        try:
-            self.model = genai.GenerativeModel(settings.GEMINI_MODEL)
-            self.is_ready = True
-        except Exception as e:
-            logger.error("Failed to initialize GenerativeModel: %s", str(e))
-            self.is_ready = False
+        self.is_ready = True
 
     def generate_interview_report(self, request: ReportGenerationRequest) -> ReportGenerationResponse:
         """Aggregates all mock interview QA pairs and generates a detailed performance report via Gemini API."""
@@ -47,19 +41,7 @@ class ReportGeneratorService:
         """
 
         try:
-            # Enforce structured JSON schemas
-            generation_config = {
-                "response_mime_type": "application/json",
-                "response_schema": ReportGenerationResponse
-            }
-
-            response = resilient_generate_content(
-                prompt,
-                generation_config=generation_config
-            )
-
-            data = json.loads(response.text)
-            parsed_response = ReportGenerationResponse(**data)
+            parsed_response = langchain_client.generate_interview_report(prompt)
             
             # Populate consolidated recommendations string for Spring Boot compatibility
             if not parsed_response.recommendations:

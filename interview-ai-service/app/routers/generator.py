@@ -33,9 +33,8 @@ async def transcribe_audio(file: UploadFile = File(...)):
         }
         prompt = "Transcribe the spoken speech in this audio file verbatim into clean English text. Output ONLY the transcribed spoken text without any extra notes, commentary, or markdown formatting."
         
-        from app.llm.gemini_client import resilient_generate_content
-        res = resilient_generate_content([audio_part, prompt])
-        transcript = res.text.strip() if res and hasattr(res, 'text') else ""
-        return {"transcript": transcript}
+        from app.llm.langchain_client import langchain_client
+        res_text = langchain_client.execute_prompt(prompt)
+        return {"transcript": res_text.strip()}
     except Exception as e:
         return {"transcript": "", "error": str(e)}

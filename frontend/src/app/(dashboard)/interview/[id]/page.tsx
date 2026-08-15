@@ -85,6 +85,7 @@ export default function LiveInterviewPage() {
   const [browserSupportNotice, setBrowserSupportNotice] = useState<string | null>(null);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const baseAnswerTextRef = useRef<string>("");
+  const isRecordingRef = useRef<boolean>(false);
 
   // Available Neural / Natural Voices State
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
@@ -125,14 +126,28 @@ export default function LiveInterviewPage() {
     }
   }, [interviewId]);
 
-  useEffect(() => {
+  const updateIndex = (idx: number) => {
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    setCurrentIdx(idx);
     setFollowUpCount(0);
     setFollowUpQuestionText("");
-    setCurrentBlockAnswers([]);
     setFollowUpQuestionsHistory([]);
-    setIsGeneratingFollowUp(false);
+    setCurrentBlockAnswers([]);
+    setAnswerText("");
+    setCodeContent("");
     activeSpokenTextRef.current = "";
-  }, [currentIdx]);
+
+    const nextQ = questions[idx];
+    if (nextQ) {
+      lastSpokenQuestionIdRef.current = nextQ.id;
+      setTimeout(() => {
+        speakQuestion(nextQ.questionText);
+      }, 100);
+    }
+    localStorage.setItem(`interview_idx_${interviewId}`, idx.toString());
+  };
 
   // Handle active webcam stream feed
   useEffect(() => {
@@ -348,7 +363,12 @@ export default function LiveInterviewPage() {
         };
 
         recog.onend = () => {
-          setIsRecording(false);
+          // If candidate is still in recording mode, restart recognition instantly for fast continuous dictation
+          if (isRecordingRef.current) {
+            try { recog.start(); } catch (e) {}
+          } else {
+            setIsRecording(false);
+          }
         };
 
         setRecognition(recog);
@@ -358,12 +378,6 @@ export default function LiveInterviewPage() {
       }
     }
   }, [isCodingMode]);
-
-  // Save progress index
-  const updateIndex = (idx: number) => {
-    setCurrentIdx(idx);
-    localStorage.setItem(`interview_idx_${interviewId}`, idx.toString());
-  };
 
   // Mutation: Submit answer
   const submitAnswerMutation = useMutation({
@@ -468,6 +482,8 @@ export default function LiveInterviewPage() {
       recorder.start();
 
       baseAnswerTextRef.current = answerText;
+      isRecordingRef.current = true;
+      setIsRecording(true);
 
       if (recognition) {
         try { recognition.start(); } catch (e) {}
@@ -479,6 +495,7 @@ export default function LiveInterviewPage() {
   };
 
   const stopRecording = () => {
+    isRecordingRef.current = false;
     setIsRecording(false);
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
       try { mediaRecorderRef.current.stop(); } catch (e) {}

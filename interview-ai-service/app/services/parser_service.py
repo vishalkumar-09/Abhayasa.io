@@ -1,7 +1,7 @@
 from io import BytesIO
 import logging
 import pypdf
-from app.llm.gemini_client import gemini_client
+from app.llm.langchain_client import langchain_client
 from app.schemas.parser import ResumeParsingResponse
 
 logger = logging.getLogger("app")
@@ -31,7 +31,7 @@ class ParserService:
         if not extracted_text:
             logger.warning("Resume PDF extraction resulted in empty text. Proceeding to fallback parsing.")
             
-        structured_data = gemini_client.parse_resume(extracted_text)
+        structured_data = langchain_client.parse_resume(extracted_text)
         return ResumeParsingResponse(
             skills=structured_data.skills,
             projects=structured_data.projects,

@@ -1,23 +1,17 @@
 import json
 import logging
-import google.generativeai as genai
 from typing import List
 
 from app.core.settings import settings
 from app.schemas.generator import QuestionGenerationRequest, QuestionGenerationResponse, GeneratedQuestionItem, FollowUpGenerationRequest, FollowUpGenerationResponse
-from app.llm.gemini_client import resilient_generate_content
+from app.llm.langchain_client import langchain_client
 from app.rag.retrieval import retrieval_service
 
 logger = logging.getLogger("app")
 
 class QuestionGeneratorService:
     def __init__(self):
-        try:
-            self.model = genai.GenerativeModel(settings.GEMINI_MODEL)
-            self.is_ready = True
-        except Exception as e:
-            logger.error("Failed to initialize GenerativeModel: %s", str(e))
-            self.is_ready = False
+        self.is_ready = True
 
     def generate_interview_questions(self, request: QuestionGenerationRequest) -> QuestionGenerationResponse:
         """Generates exactly 45 interview questions (20 Resume, 20 Technical, 3 DSA, 2 HR) based on RAG context."""
@@ -93,22 +87,7 @@ class QuestionGeneratorService:
             """
  
         try:
-            generation_config = {
-                "response_mime_type": "application/json",
-                "response_schema": QuestionGenerationResponse
-            }
- 
-            response = resilient_generate_content(
-                prompt,
-                generation_config=generation_config
-            )
- 
-            data = json.loads(response.text)
-            
-            # Enforce validation
-            parsed_response = QuestionGenerationResponse(**data)
-            logger.info("Successfully generated %d questions using Gemini API.", len(parsed_response.questions))
-            return parsed_response
+            return langchain_client.generate_interview_questions_rag(prompt)
  
         except Exception as e:
             logger.error("Error during Gemini question generation: %s. Falling back to mock questions.", str(e))
@@ -333,49 +312,16 @@ class QuestionGeneratorService:
         return options[0]
 
     def generate_followup_question(self, request: FollowUpGenerationRequest) -> FollowUpGenerationResponse:
-        """Generates a contextual follow-up question based on the candidate's previous response using Gemini."""
-        if not settings.GEMINI_API_KEY or settings.GEMINI_API_KEY == "YOUR_GEMINI_API_KEY" or not self.is_ready:
-            logger.info("Gemini API not configured. Returning local fallback follow-up question.")
-            fallback_text = self.generate_followup_fallback(request)
-            return FollowUpGenerationResponse(followupQuestion=fallback_text)
-
-        prompt = f"""
-        You are a senior technical or HR interviewer. The candidate has just answered an interview question.
-        Generate exactly one short, contextual follow-up question (maximum 1 or 2 sentences) based on their answer.
-        Probed for details, ask them to clarify an aspect of their answer, or ask about edge cases and tradeoffs.
-        Do NOT repeat or ask questions that are similar to the previously asked follow-ups.
-        
-        Current Question:
-        {request.question_text}
-        
-        Candidate's Answer:
-        {request.answer_text}
-        
-        Previously Asked Follow-ups for this question (DO NOT REPEAT):
-        {", ".join(request.history) if request.history else "None"}
-        
-        Respond with a JSON object matching this schema:
-        {{
-            "followupQuestion": "Your generated follow-up question text here"
-        }}
-        """
-
+        """Generates a contextual follow-up question via LangChain Rolling LLMs."""
         try:
-            generation_config = {
-                "response_mime_type": "application/json",
-                "response_schema": FollowUpGenerationResponse
-            }
-
-            response = resilient_generate_content(
-                prompt,
-                generation_config=generation_config
+            followup_text = langchain_client.generate_followup_question(
+                question_text=request.question_text,
+                answer_text=request.answer_text,
+                history=request.history
             )
-
-            data = json.loads(response.text)
-            return FollowUpGenerationResponse(**data)
-
+            return FollowUpGenerationResponse(followupQuestion=followup_text)
         except Exception as e:
-            logger.error("Error during Gemini follow-up question generation: %s. Falling back to local helper.", str(e))
+            logger.error("Error during LangChain follow-up generation: %s. Using local fallback.", str(e))
             fallback_text = self.generate_followup_fallback(request)
             return FollowUpGenerationResponse(followupQuestion=fallback_text)
  

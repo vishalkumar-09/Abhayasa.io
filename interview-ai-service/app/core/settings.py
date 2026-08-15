@@ -6,10 +6,14 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     LOG_LEVEL: str = "INFO"
     
-    # Gemini API Configuration
+    # Multi-LLM Provider API Keys
     GEMINI_API_KEY: str = Field(default="", validation_alias="GEMINI_API_KEY")
     GEMINI_MODEL: str = Field(default="gemini-2.0-flash", validation_alias="GEMINI_MODEL")
     GEMINI_EMBEDDING_MODEL: str = Field(default="models/gemini-embedding-001", validation_alias="GEMINI_EMBEDDING_MODEL")
+    
+    OPENAI_API_KEY: str = Field(default="", validation_alias="OPENAI_API_KEY")
+    GROQ_API_KEY: str = Field(default="", validation_alias="GROQ_API_KEY")
+    ANTHROPIC_API_KEY: str = Field(default="", validation_alias="ANTHROPIC_API_KEY")
     
     # Qdrant Vector DB Configuration
     QDRANT_HOST: str = Field(default="localhost", validation_alias="QDRANT_HOST")
