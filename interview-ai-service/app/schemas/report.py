@@ -5,7 +5,7 @@ class AnswerDetail(BaseModel):
     questionText: str = Field(description="The question that was asked")
     answerText: str = Field(description="The answer text transcript provided by the candidate")
     expectedKeywords: List[str] = Field(default=[], description="Expected keywords or technical terms")
-    score: int = Field(description="The evaluated score (0-10) for this answer")
+    score: float = Field(description="The evaluated score (0-10) for this answer")
     feedback: str = Field(description="Constructive feedback for this specific answer")
 
 class ReportGenerationRequest(BaseModel):

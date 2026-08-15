@@ -34,9 +34,9 @@ class QuestionGeneratorService:
         # 2. Check if API key is valid, else fallback to mock questions
         interview_type = request.interview_type.upper() if request.interview_type else "TECHNICAL"
 
-        # 2. Check if API key is valid, else fallback to mock questions
-        if not settings.GEMINI_API_KEY or settings.GEMINI_API_KEY == "YOUR_GEMINI_API_KEY" or not self.is_ready:
-            logger.info("Gemini API not configured. Returning mock questions list.")
+        # 2. Check if rolling LLM client is ready, else fallback to mock questions
+        if not langchain_client.is_ready:
+            logger.info("Rolling LLMs not ready. Returning mock questions list.")
             return self.get_mock_questions_response(
                 request.difficulty, 
                 request.resume_text, 
@@ -129,64 +129,10 @@ class QuestionGeneratorService:
         job_skills = [t for t in known_techs if t.lower() in jd_lower]
         if not job_skills:
             job_skills = ["Software Engineering", "System Design", "Databases"]
-            
-        # 2. Extract Projects
-        projects = []
-        lines = [line.strip() for line in resume_text.split('\n') if line.strip()]
-        in_projects = False
-        for line in lines:
-            clean_line = line.upper().replace(":", "").replace("-", "").strip()
-            if clean_line in ["PROJECTS", "PROJECT", "PERSONAL PROJECTS", "ACADEMIC PROJECTS", "KEY PROJECTS", "PROJECTS WORKED ON"]:
-                in_projects = True
-                continue
-            if in_projects:
-                if clean_line in ["EXPERIENCE", "WORK EXPERIENCE", "EMPLOYMENT", "PROFESSIONAL EXPERIENCE", "TECHNICAL SKILLS", "ACHIEVEMENTS", "EDUCATION", "CODING PROFILES", "LANGUAGES", "SKILLS", "INTERNSHIPS"]:
-                    break
-                # Filter out description lines starting with bullets
-                if line.startswith("•") or line.startswith("-") or line.startswith("*"):
-                    continue
-                parts = line.split('|')
-                if len(parts) > 1 or '/' in line or '–' in line:
-                    name = line.split('/')[0].split('|')[0].split('–')[0].strip()
-                    name_words = name.split()
-                    if 0 < len(name_words) <= 3:
-                        projects.append(name)
 
-        # 3. Extract Experience (Companies)
-        companies = []
-        in_exp = False
-        for line in lines:
-            clean_line = line.upper().replace(":", "").replace("-", "").strip()
-            if clean_line in ["EXPERIENCE", "PROFESSIONAL EXPERIENCE", "WORK EXPERIENCE", "INTERNSHIPS", "EMPLOYMENT HISTORY"]:
-                in_exp = True
-                continue
-            if in_exp:
-                if clean_line in ["PROJECTS", "PERSONAL PROJECTS", "TECHNICAL SKILLS", "ACHIEVEMENTS", "EDUCATION", "CODING PROFILES", "LANGUAGES", "SKILLS"]:
-                    break
-                if line.startswith("•") or line.startswith("-") or line.startswith("*"):
-                    continue
-                parts = line.split(',')
-                if len(parts) > 1 or '–' in line:
-                    name = line.split(',')[0].split('–')[0].strip()
-                    name_words = name.split()
-                    if 0 < len(name_words) <= 4:
-                        companies.append(name)
+        target_title = job_title if job_title else "Software Engineer"
+        target_company = company_name if company_name else "the company"
 
-        # Set sensible defaults if parsing couldn't find anything
-        if not projects:
-            projects = ["ModelSmith", "InterviewForge", "CloudCommerce"]
-        if not companies:
-            companies = ["LITSS", "TechInnovate Solutions"]
-            
-        target_title = job_title if job_title else "Software Engineer Intern"
-        target_company = company_name if company_name else "ARM"
-
-        # Expand arrays to avoid index out of bounds
-        while len(projects) < 3:
-            projects.append(projects[0] if projects else "InterviewForge")
-        while len(companies) < 2:
-            companies.append(companies[0] if companies else "LITSS")
-            
         if interview_type == "HR":
             hr_questions = [
                 ("Describe a time when you disagreed with a colleague on a technical decision. How did you resolve it?", ["disagreement", "resolution", "communication", "teamwork"]),
@@ -203,26 +149,21 @@ class QuestionGeneratorService:
                     expected_keywords=kw
                 ))
         else:
-            # Formulate 4 Resume-specific questions dynamically
+            # Formulate 4 Resume-specific questions dynamically using candidate's actual extracted skills
             resume_templates = [
-                "In your project {proj}, how did you design the architecture to support {skill}?",
-                "What were the biggest scaling challenges you encountered while implementing {proj}?",
-                "When developing {proj}, why did you choose {skill} over alternative technologies?",
-                "Can you describe a major debugging challenge you faced in {proj} and how you fixed it?",
-                "In your experience at {comp}, how did you integrate {skill} to improve performance or security?",
-                "How did you collaborate with your team at {comp} to establish best practices in {skill}?",
-                "For the features you built in {proj}, how did you handle data validation and validation schemas?"
+                "In your projects utilizing {skill}, how did you design the system architecture for maintainability?",
+                "What were the biggest performance or scaling challenges you encountered while implementing your {skill} features?",
+                "When developing your application, why did you choose {skill} over alternative frameworks or tools?",
+                "Can you describe a complex technical debugging challenge you faced while working with {skill} and how you fixed it?"
             ]
             for i in range(4):
                 skill = candidate_skills[i % len(candidate_skills)]
-                proj = projects[i % len(projects)]
-                comp = companies[i % len(companies)]
-                text = resume_templates[i % len(resume_templates)].format(skill=skill, proj=proj, comp=comp)
+                text = resume_templates[i].format(skill=skill)
                 questions.append(GeneratedQuestionItem(
-                    question_text=text,
-                    category="RESUME",
-                    difficulty=difficulty,
-                    expected_keywords=[skill, proj, "architecture"]
+                    question_text=text, 
+                    category="RESUME", 
+                    difficulty=difficulty, 
+                    expected_keywords=[skill, "architecture", "implementation"]
                 ))
      
             # Formulate 4 Technical questions dynamically matching the target job description details

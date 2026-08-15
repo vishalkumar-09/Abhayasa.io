@@ -13,9 +13,9 @@ class ReportGeneratorService:
     def generate_interview_report(self, request: ReportGenerationRequest) -> ReportGenerationResponse:
         """Aggregates all mock interview QA pairs and generates a detailed performance report via Gemini API."""
         
-        # Check if API key is configured, else fallback to mock report
-        if not settings.GEMINI_API_KEY or settings.GEMINI_API_KEY == "YOUR_GEMINI_API_KEY" or not self.is_ready:
-            logger.info("Gemini API not configured. Returning mock evaluation report.")
+        # Check if rolling LLM client is ready, else fallback to mock report
+        if not langchain_client.is_ready:
+            logger.info("Rolling LLMs not ready. Returning mock evaluation report.")
             return self.get_mock_report(request)
 
         # Build prompt containing all QA pairs

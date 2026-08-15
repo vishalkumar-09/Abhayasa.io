@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import threading
 from typing import List, Dict, Any, Optional, Tuple
 
@@ -12,6 +13,51 @@ from app.schemas.generator import GeneratedQuestionItem, QuestionGenerationRespo
 from app.schemas.report import ReportGenerationResponse
 
 logger = logging.getLogger("app")
+
+def extract_json_payload(raw_text: str) -> Any:
+    """Extracts valid JSON payload from raw LLM output using multi-stage matching."""
+    if not raw_text or not raw_text.strip():
+        raise ValueError("Empty response from LLM")
+    
+    cleaned = raw_text.strip()
+    
+    # 1. Direct JSON parse
+    try:
+        return json.loads(cleaned)
+    except Exception:
+        pass
+
+    # 2. Extract from markdown code blocks ```json ... ```
+    code_block_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', cleaned, re.IGNORECASE)
+    if code_block_match:
+        try:
+            return json.loads(code_block_match.group(1).strip())
+        except Exception:
+            pass
+
+    # 3. Extract JSON Object { ... }
+    dict_match = re.search(r'\{[\s\S]*\}', cleaned)
+    if dict_match:
+        str_val = dict_match.group(0)
+        for i in range(len(str_val), 0, -1):
+            if str_val[i-1] == '}':
+                try:
+                    return json.loads(str_val[:i])
+                except Exception:
+                    continue
+
+    # 4. Extract JSON Array [ ... ]
+    list_match = re.search(r'\[[\s\S]*\]', cleaned)
+    if list_match:
+        str_val = list_match.group(0)
+        for i in range(len(str_val), 0, -1):
+            if str_val[i-1] == ']':
+                try:
+                    return json.loads(str_val[:i])
+                except Exception:
+                    continue
+
+    return json.loads(cleaned)
 
 # Provider model definitions prioritized by speed and active API support
 PROVIDER_MODELS = {
@@ -179,8 +225,9 @@ Resume Text:
         formatted_prompt = prompt_template.format(resume_text=resume_text[:4000])
         try:
             raw_output = self.execute_prompt(formatted_prompt)
-            cleaned = raw_output.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-            data = json.loads(cleaned)
+            data = extract_json_payload(raw_output)
+            if isinstance(data, list):
+                data = {"skills": data, "projects": [], "education": [], "experience": []}
             return StructuredResumeData(**data)
         except Exception as e:
             logger.error("LangChain parse_resume error: %s", str(e))
@@ -194,8 +241,9 @@ Resume Text:
     def generate_interview_questions_rag(self, prompt_text: str) -> QuestionGenerationResponse:
         """Generates interview questions using LangChain rolling models."""
         raw_output = self.execute_prompt(prompt_text, temperature=0.7)
-        cleaned = raw_output.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-        data = json.loads(cleaned)
+        data = extract_json_payload(raw_output)
+        if isinstance(data, list):
+            data = {"questions": data}
         return QuestionGenerationResponse(**data)
 
     def generate_followup_question(self, question_text: str, answer_text: str, history: List[str] = None) -> str:
@@ -208,7 +256,6 @@ Resume Text:
 
         safe_question = (question_text or "")[:300]
         safe_answer = (answer_text or "")[:400]
-        safe_history = [str(h)[:150] for h in (history or [])[-2:]]
 
         prompt_template = PromptTemplate.from_template(
             """You are an elite technical interviewer.
@@ -270,8 +317,7 @@ Return ONLY a JSON object with:
 
         try:
             raw_output = self.execute_prompt(formatted_prompt, temperature=0.3, max_tokens=220)
-            cleaned = raw_output.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-            data = json.loads(cleaned)
+            data = extract_json_payload(raw_output)
             return AnswerEvaluationResponse(**data)
         except Exception as e:
             logger.error("LangChain evaluate_answer error: %s", str(e))
@@ -319,8 +365,7 @@ Return ONLY a JSON object with:
     def generate_interview_report(self, prompt_text: str) -> ReportGenerationResponse:
         """Generates performance evaluation report using LangChain rolling models."""
         raw_output = self.execute_prompt(prompt_text, temperature=0.5)
-        cleaned = raw_output.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-        data = json.loads(cleaned)
+        data = extract_json_payload(raw_output)
         return ReportGenerationResponse(**data)
 
 # Global singleton instance
