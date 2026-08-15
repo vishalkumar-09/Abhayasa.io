@@ -447,15 +447,27 @@ export default function LiveInterviewPage() {
       setAudioStream(stream);
       setIsRecording(true);
 
-      // Cross-platform MediaRecorder setup for Safari, Chrome Mobile, Firefox & Edge
+      // Cross-platform MediaRecorder setup with safe fallback for iOS Safari & Android Mobile
       audioChunksRef.current = [];
-      const mimeType = typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("audio/webm")
-        ? "audio/webm"
-        : typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("audio/mp4")
-        ? "audio/mp4"
-        : "";
-      
-      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      let recorder: MediaRecorder;
+      try {
+        let mimeType = "";
+        if (typeof MediaRecorder !== "undefined") {
+          if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+            mimeType = "audio/webm;codecs=opus";
+          } else if (MediaRecorder.isTypeSupported("audio/webm")) {
+            mimeType = "audio/webm";
+          } else if (MediaRecorder.isTypeSupported("audio/mp4")) {
+            mimeType = "audio/mp4";
+          } else if (MediaRecorder.isTypeSupported("audio/aac")) {
+            mimeType = "audio/aac";
+          }
+        }
+        recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      } catch (e) {
+        // Fallback for iOS Safari: Instantiate MediaRecorder without explicit mimeType
+        recorder = new MediaRecorder(stream);
+      }
 
       recorder.ondataavailable = (e) => {
         if (e.data && e.data.size > 0) {
@@ -470,7 +482,8 @@ export default function LiveInterviewPage() {
           const blobType = recorder.mimeType || "audio/webm";
           const audioBlob = new Blob(audioChunksRef.current, { type: blobType });
           const formData = new FormData();
-          formData.append("file", audioBlob, `speech.${blobType.includes("mp4") ? "mp4" : "webm"}`);
+          const ext = blobType.includes("mp4") ? "mp4" : blobType.includes("aac") ? "aac" : "webm";
+          formData.append("file", audioBlob, `speech.${ext}`);
 
           try {
             const res = await apiClient.post("/api/v1/interviews/transcribe-audio", formData, {
@@ -502,12 +515,64 @@ export default function LiveInterviewPage() {
       isRecordingRef.current = true;
       setIsRecording(true);
 
-      if (recognition) {
-        try { recognition.start(); } catch (e) {}
+      const SpeechRecognition =
+        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        try {
+          const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+          const activeRecog = recognition || new SpeechRecognition();
+          activeRecog.continuous = !isMobile;
+          activeRecog.interimResults = true;
+          activeRecog.lang = "en-US";
+
+          activeRecog.onresult = (event: any) => {
+            let spoken = "";
+            for (let i = 0; i < event.results.length; i++) {
+              spoken += event.results[i][0].transcript;
+            }
+            if (spoken.trim()) {
+              hasWebSpeechTranscribedRef.current = true;
+            }
+            const base = baseAnswerTextRef.current;
+            const updated = base ? base.trim() + " " + spoken.trim() : spoken.trim();
+
+            if (isCodingMode) {
+              setCodeContent((prev) => {
+                const baseCode = prev.split("\n// Spoken explanation:")[0];
+                return baseCode.trim() + `\n// Spoken explanation: ${updated}`;
+              });
+            } else {
+              setAnswerText(updated);
+            }
+          };
+
+          activeRecog.onerror = (event: any) => {
+            console.error("Speech recognition error:", event.error);
+          };
+
+          activeRecog.onend = () => {
+            if (isRecordingRef.current) {
+              try { activeRecog.start(); } catch (e) {}
+            } else {
+              setIsRecording(false);
+            }
+          };
+
+          setRecognition(activeRecog);
+          activeRecog.start();
+        } catch (e) {
+          console.warn("WebSpeech recognition start failed:", e);
+        }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Microphone access error:", err);
-      setErrorMsg("Microphone access denied or unsupported. Please enable mic permissions.");
+      const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
+      const isLocal = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+      if (!isHttps && !isLocal) {
+        setErrorMsg("Microphone access requires HTTPS or localhost on mobile devices. Please enable camera/microphone permissions in your mobile browser settings.");
+      } else {
+        setErrorMsg("Microphone access denied or unsupported. Please enable mic permissions in your browser.");
+      }
     }
   };
 
