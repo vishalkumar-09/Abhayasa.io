@@ -17,4 +17,6 @@ public class StartInterviewRequest {
 
     @NotNull(message = "Job description identifier is required")
     private Long jobDescriptionId;
+
+    private String interviewType = "TECHNICAL";
 }

@@ -37,6 +37,9 @@ public class Question {
     @Column(nullable = false)
     private QuestionDifficulty difficulty;
 
+    @Column(name = "category", nullable = true)
+    private String category = "TECHNICAL";
+
     @OneToOne(mappedBy = "question", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private Answer answer;
 

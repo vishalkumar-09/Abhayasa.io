@@ -74,35 +74,91 @@ class ReportGeneratorService:
             return self.get_mock_report(request)
 
     def get_mock_report(self, request: ReportGenerationRequest) -> ReportGenerationResponse:
-        """Calculates raw overall score average and maps standard stubs for standalone runs."""
-        scores = [a.score for a in request.answers if a.score is not None]
-        avg_score = sum(scores) / len(scores) if scores else 6.5
+        """Calculates raw overall score average and generates a dynamic evaluation report based on candidate performance."""
+        answers = request.answers
+        scores = [a.score for a in answers if a.score is not None]
+        avg_score = sum(scores) / len(scores) if scores else 0.0
         overall_score = round(float(avg_score), 2)
 
-        summary = (
-            "The candidate demonstrated solid fundamental programming skills, particularly in database configurations "
-            "and basic REST API design. However, explanations regarding system architecture details and concurrency control "
-            "mechanisms were incomplete."
-        )
-        strengths = [
-            "Good knowledge of relational database indexing and JPA mapping syntax.",
-            "Strong articulation of REST principles and HTTP status code mappings.",
-            "Demonstrated clear communication style and professional delivery."
-        ]
-        weaknesses = [
-            "Limited explanation of spring security filters and JWT validation interceptors.",
-            "Incomplete discussion regarding caching mechanisms and ORM lazy loading bottlenecks."
-        ]
-        missing_concepts = [
-            "Spring Security Filter Chain lifecycle",
-            "JPA transaction isolation levels",
-            "Next.js state management hydration edge-cases"
-        ]
-        roadmap = [
-            "Review Spring Security request filtering filters and trace JWT interceptors.",
-            "Study database transaction isolations (optimistic vs pessimistic locking in JPA).",
-            "Practice algorithmic sliding window coding puzzles on strings and arrays."
-        ]
+        # Check if they skipped/failed the interview
+        non_blank_answers = [a for a in answers if a.answerText and a.answerText.strip() and a.score > 2]
+        
+        if len(non_blank_answers) == 0:
+            summary = (
+                "The candidate did not provide substantial answers to the questions in this interview session. "
+                "No technical evaluation could be completed because of the missing or incomplete responses."
+            )
+            strengths = ["No technical strengths could be identified from the blank responses."]
+            weaknesses = [
+                "Failed to attempt the technical, scenario-based, and algorithm questions.",
+                "Incomplete participation in the mock interview session."
+            ]
+            
+            # Extract missing concepts from expected keywords of the questions
+            missing_concepts = []
+            for a in answers:
+                if a.expectedKeywords:
+                    missing_concepts.extend(a.expectedKeywords)
+            missing_concepts = list(set(missing_concepts))[:6]
+            if not missing_concepts:
+                missing_concepts = ["System Design", "Core Technologies", "Problem Solving"]
+                
+            roadmap = [
+                "Review the syllabus and technical prerequisites for the role.",
+                "Attempt the mock interview again and provide written explanations for each question.",
+                "Familiarize yourself with core concepts like API development, state management, and algorithms."
+            ]
+        else:
+            # Sort answers by score
+            answered_items = [a for a in answers if a.score is not None]
+            answered_items.sort(key=lambda x: x.score, reverse=True)
+            
+            best_answers = [a for a in answered_items if a.score >= 7]
+            worst_answers = [a for a in answered_items if a.score < 7]
+            
+            strengths = []
+            for a in best_answers[:3]:
+                topic = a.expectedKeywords[0] if a.expectedKeywords else "Technical Explanation"
+                strengths.append(f"Strong understanding of '{topic}': {a.feedback}")
+            if not strengths:
+                strengths = ["Completed mock responses and demonstrated general technical interest."]
+                
+            weaknesses = []
+            for a in worst_answers[:3]:
+                topic = a.expectedKeywords[0] if a.expectedKeywords else "General Concepts"
+                if a.score <= 2:
+                    weaknesses.append(f"Candidate skipped or provided minimal answer for '{topic}': '{a.questionText}'")
+                else:
+                    weaknesses.append(f"Gaps identified in '{topic}': {a.feedback}")
+            if not weaknesses:
+                weaknesses = ["No major technical weaknesses identified in the provided answers."]
+                
+            # Collect missing concepts
+            missing_concepts = []
+            for a in worst_answers:
+                if a.expectedKeywords:
+                    missing_concepts.extend(a.expectedKeywords)
+            missing_concepts = list(set(missing_concepts))[:5]
+            if not missing_concepts:
+                missing_concepts = ["System optimization", "Edge case coverage"]
+                
+            # Generate roadmap items
+            roadmap = []
+            for a in worst_answers[:3]:
+                topic = a.expectedKeywords[0] if a.expectedKeywords else "General Concepts"
+                if a.score <= 2:
+                    roadmap.append(f"Study core definitions of '{topic}' and practice explaining: '{a.questionText}'")
+                else:
+                    roadmap.append(f"Deepen understanding of '{topic}' to resolve feedback: '{a.feedback}'")
+            if not roadmap:
+                roadmap = ["Keep practicing technical coding questions and mock interviews."]
+                
+            # Generate summary
+            summary = (
+                f"The candidate completed the mock interview with an overall average score of {overall_score}/10. "
+                f"Strongest performance was observed in topics like {', '.join([a.expectedKeywords[0] if a.expectedKeywords else 'general concepts' for a in best_answers[:2]]) if best_answers else 'fundamental concepts'}, "
+                f"while further study is recommended for areas such as {', '.join([a.expectedKeywords[0] if a.expectedKeywords else 'advanced implementations' for a in worst_answers[:2]]) if worst_answers else 'skipped questions'}."
+            )
 
         roadmap_str = "\n".join([f"- {item}" for item in roadmap])
         concepts_str = ", ".join(missing_concepts)

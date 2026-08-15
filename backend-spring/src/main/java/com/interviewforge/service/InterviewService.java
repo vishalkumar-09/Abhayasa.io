@@ -61,14 +61,20 @@ public class InterviewService {
                 .resume(resume)
                 .jobDescription(jobDescription)
                 .status(InterviewStatus.PENDING)
+                .interviewType(request.getInterviewType() != null ? request.getInterviewType().toUpperCase() : "TECHNICAL")
                 .questions(new ArrayList<>())
                 .build();
 
         Interview savedInterview = interviewRepository.save(interview);
 
-        // 2. Fetch questions from the AI service
         List<AiServiceClient.GeneratedQuestion> generatedQuestions = 
-                aiServiceClient.generateQuestions(resume.getParsedText(), jobDescription.getRawText());
+                aiServiceClient.generateQuestions(
+                        resume.getParsedText(), 
+                        jobDescription.getRawText(),
+                        jobDescription.getTitle(),
+                        jobDescription.getCompanyName(),
+                        savedInterview.getInterviewType()
+                );
 
         // 3. Save questions mapped to the interview session
         List<Question> questions = generatedQuestions.stream().map(gq -> {
@@ -82,6 +88,7 @@ public class InterviewService {
                     .questionText(gq.getQuestionText())
                     .expectedKeywords(gq.getExpectedKeywords())
                     .difficulty(difficulty)
+                    .category(gq.getCategory() != null ? gq.getCategory().toUpperCase() : "TECHNICAL")
                     .build();
         }).collect(Collectors.toList());
 
@@ -263,6 +270,9 @@ public class InterviewService {
                             .id(q.getId())
                             .questionText(q.getQuestionText())
                             .difficulty(q.getDifficulty().name())
+                            .answered(q.getAnswer() != null)
+                            .category(q.getCategory() != null ? q.getCategory() : "TECHNICAL")
+                            .answer(q.getAnswer() != null ? mapToAnswerResponse(q.getAnswer()) : null)
                             .build())
                     .collect(Collectors.toList());
         }
@@ -273,6 +283,7 @@ public class InterviewService {
                 .resumeId(interview.getResume() != null ? interview.getResume().getId() : null)
                 .jobDescriptionId(interview.getJobDescription() != null ? interview.getJobDescription().getId() : null)
                 .questions(questionDtos)
+                .interviewType(interview.getInterviewType())
                 .createdAt(interview.getCreatedAt())
                 .build();
     }
@@ -299,5 +310,18 @@ public class InterviewService {
                 .recommendations(report.getRecommendations())
                 .createdAt(report.getCreatedAt())
                 .build();
+    }
+
+    @Transactional(readOnly = true)
+    public AiServiceClient.HintResponse getHint(Long interviewId, Long questionId, List<AiServiceClient.ChatMessage> chatHistory) {
+        User user = getAuthenticatedUser();
+        Interview interview = interviewRepository.findById(interviewId)
+                .orElseThrow(() -> new ResourceNotFoundException("Interview not found"));
+        if (!Objects.equals(interview.getUser().getId(), user.getId())) {
+            throw new UnauthorizedException("You do not own this interview.");
+        }
+        Question question = questionRepository.findById(questionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Question not found"));
+        return aiServiceClient.getHint(question.getQuestionText(), question.getExpectedKeywords(), chatHistory);
     }
 }

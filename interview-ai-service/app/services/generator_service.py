@@ -37,33 +37,59 @@ class QuestionGeneratorService:
                 logger.error("RAG context lookup failed: %s", str(e))
 
         # 2. Check if API key is valid, else fallback to mock questions
+        interview_type = request.interview_type.upper() if request.interview_type else "TECHNICAL"
+
+        # 2. Check if API key is valid, else fallback to mock questions
         if not settings.GEMINI_API_KEY or settings.GEMINI_API_KEY == "YOUR_GEMINI_API_KEY" or not self.is_ready:
-            logger.info("Gemini API not configured. Returning 45 mock questions list.")
-            return self.get_mock_questions_response(request.difficulty, request.resume_text, request.job_description_text)
+            logger.info("Gemini API not configured. Returning mock questions list.")
+            return self.get_mock_questions_response(
+                request.difficulty, 
+                request.resume_text, 
+                request.job_description_text,
+                request.job_title,
+                request.company_name,
+                interview_type
+            )
  
-        # 3. Assemble Prompt
-        prompt = f"""
-        You are an elite technical interviewer. Generate an interview question set tailored to the candidate's resume and the target job description.
-        
-        Difficulty level required: {request.difficulty}
-        
-        Candidate Resume:
-        {request.resume_text}
-        
-        {"Semantic RAG Resume Highlights (focus on these areas):" if rag_context else ""}
-        {rag_context}
-        
-        Job Description Requirements:
-        {request.job_description_text}
-        
-        You MUST generate exactly 45 questions categorized as follows:
-        1. "RESUME" (20 questions): Specific questions probing the projects, achievements, and experiences mentioned in the resume. Focus on candidate ownership and technical decisions.
-        2. "TECHNICAL" (20 questions): Questions evaluating core technologies, concepts, and architectural principles required for the job description.
-        3. "DSA" (3 questions): Algorithms, complexity, and coding puzzles (e.g. structures, sorting, graphs, DP) matching the {request.difficulty} difficulty.
-        4. "HR" (2 questions): Behavioral and situational questions (e.g., handling conflicts, teamwork, career goals).
- 
-        Enforce that all questions match the {request.difficulty} difficulty level. Provide relevant expected_keywords for each question.
-        """
+        # 3. Assemble Prompt dynamically based on interview type
+        if interview_type == "HR":
+            prompt = f"""
+            You are an expert HR manager. Generate an HR and behavioral interview question set.
+            
+            Difficulty level: {request.difficulty}
+            Target Company Name: {request.company_name or 'the company'}
+            Target Job Title: {request.job_title or 'the role'}
+            
+            Candidate Resume text (for cultural/background context):
+            {request.resume_text}
+            
+            You MUST generate exactly 5 questions categorized as follows:
+            - "HR" (5 questions): behavioral, situational, conflict resolution, communication, interest in joining {request.company_name or 'the company'}, and career path.
+            
+            Enforce that all questions match the {request.difficulty} difficulty level. Provide relevant expected_keywords for each question.
+            """
+        else:
+            prompt = f"""
+            You are an elite technical interviewer. Generate a technical interview question set tailored to the candidate's resume and target job description.
+            
+            Difficulty level required: {request.difficulty}
+            
+            Candidate Resume:
+            {request.resume_text}
+            
+            {"Semantic RAG Resume Highlights (focus on these areas):" if rag_context else ""}
+            {rag_context}
+            
+            Job Description Requirements:
+            {request.job_description_text}
+            
+            You MUST generate exactly 10 questions categorized as follows:
+            1. "DSA" (2 questions): Algorithms, data structures, complexity, and coding puzzles (e.g. arrays, strings, dynamic programming, linked lists, trees) matching the {request.difficulty} difficulty.
+            2. "TECHNICAL" (4 questions): Evaluating core technologies, concepts, and architectural principles required for the job description.
+            3. "RESUME" (4 questions): Specific technical questions probing the technical projects, achievements, technologies, and developer decisions mentioned in the resume.
+            
+            Enforce that all questions match the {request.difficulty} difficulty level. Provide relevant expected_keywords for each question.
+            """
  
         try:
             generation_config = {
@@ -85,10 +111,25 @@ class QuestionGeneratorService:
  
         except Exception as e:
             logger.error("Error during Gemini question generation: %s. Falling back to mock questions.", str(e))
-            return self.get_mock_questions_response(request.difficulty, request.resume_text, request.job_description_text)
+            return self.get_mock_questions_response(
+                request.difficulty, 
+                request.resume_text, 
+                request.job_description_text,
+                request.job_title,
+                request.company_name,
+                interview_type
+            )
  
-    def get_mock_questions_response(self, difficulty: str, resume_text: str, jd_text: str) -> QuestionGenerationResponse:
-        """Returns a dynamically generated fallback list of exactly 45 questions reflecting candidate skills."""
+    def get_mock_questions_response(
+        self, 
+        difficulty: str, 
+        resume_text: str, 
+        jd_text: str, 
+        job_title: str = None, 
+        company_name: str = None,
+        interview_type: str = "TECHNICAL"
+    ) -> QuestionGenerationResponse:
+        """Returns a dynamically generated fallback list of questions reflecting candidate skills, projects, and experiences based on interview type."""
         questions = []
         
         # Predefined common tech keywords to check
@@ -98,7 +139,7 @@ class QuestionGeneratorService:
             "MongoDB", "Redis", "Docker", "Kubernetes", "AWS", "GCP", "Git", "REST APIs", "GraphQL"
         ]
         
-        # Simple extraction
+        # 1. Simple skills extraction
         resume_lower = resume_text.lower()
         candidate_skills = [t for t in known_techs if t.lower() in resume_lower]
         if not candidate_skills:
@@ -109,71 +150,131 @@ class QuestionGeneratorService:
         if not job_skills:
             job_skills = ["Software Engineering", "System Design", "Databases"]
             
-        # 20 Resume questions formulated dynamically
-        resume_templates = [
-            "How did you handle state management or configurations when working with {skill}?",
-            "Can you describe a challenging bug you faced while working with {skill} and how you debugged it?",
-            "In your resume, you mentioned experience with {skill}. What design patterns did you apply there?",
-            "Why did you choose {skill} over alternative technologies for your projects?",
-            "How did you optimize the performance or load times when integrating {skill}?",
-            "Can you explain how you secured endpoints or data access in your {skill} implementations?",
-            "How did you test your {skill} codebase to ensure high test coverage?",
-            "What were the primary data persistence strategies you used with {skill}?",
-            "Can you describe the system architecture of a project where you integrated {skill} and {prev_skill}?",
-            "What was the most complex feature you built using {skill} and what was your ownership?"
-        ]
-        
-        for i in range(20):
-            skill = candidate_skills[i % len(candidate_skills)]
-            prev_skill = candidate_skills[(i - 1) % len(candidate_skills)]
-            text = resume_templates[i % len(resume_templates)].format(skill=skill, prev_skill=prev_skill)
-            questions.append(GeneratedQuestionItem(
-                question_text=text,
-                category="RESUME",
-                difficulty=difficulty,
-                expected_keywords=[skill, "architecture", "debugging"]
-            ))
- 
-        # 20 Technical questions formulated dynamically
-        tech_templates = [
-            "What are the best practices for structuring a production-ready application using {skill}?",
-            "How does concurrency and multi-threading work under the hood in {skill}?",
-            "Explain how dependency injection or module management is handled in {skill}.",
-            "What are the common memory leak patterns or bottlenecks in {skill} and how do you prevent them?",
-            "How do you handle database connections or session lifecycles in {skill}?",
-            "Explain the difference between synchronous and asynchronous operations in {skill}.",
-            "How do you implement error handling and logging in a {skill} application?",
-            "Describe the difference between compilation and runtime execution in {skill}.",
-            "How does {skill} ensure data integrity and validation for incoming client payloads?",
-            "What are the major differences between the latest version of {skill} and its predecessors?"
-        ]
-        
-        for i in range(20):
-            skill = job_skills[i % len(job_skills)]
-            text = tech_templates[i % len(tech_templates)].format(skill=skill)
-            questions.append(GeneratedQuestionItem(
-                question_text=text,
-                category="TECHNICAL",
-                difficulty=difficulty,
-                expected_keywords=[skill, "best practices", "architecture"]
-            ))
- 
-        # 3 DSA questions
-        dsa_questions = [
-            ("Explain how to find the longest substring without repeating characters. What is the time complexity?", ["longest substring", "sliding window", "hash set", "O(N)"]),
-            ("How do you detect a cycle in a linked list? Describe Floyd's Cycle Finding algorithm.", ["linked list cycle", "Floyd's algorithm", "two pointers", "slow and fast"]),
-            ("Given a binary tree, how do you find its maximum depth recursively?", ["binary tree", "maximum depth", "recursion", "DFS"])
-        ]
-        for text, kw in dsa_questions:
-            questions.append(GeneratedQuestionItem(question_text=text, category="DSA", difficulty=difficulty, expected_keywords=kw))
- 
-        # 2 HR questions
-        hr_questions = [
-            ("Describe a time when you disagreed with a colleague on a technical decision. How did you resolve it?", ["disagreement", "resolution", "communication", "teamwork"]),
-            ("Why are you interested in joining InterviewForge and what do you hope to accomplish here?", ["motivation", "career goals", "interest"])
-        ]
-        for text, kw in hr_questions:
-            questions.append(GeneratedQuestionItem(question_text=text, category="HR", difficulty=difficulty, expected_keywords=kw))
+        # 2. Extract Projects
+        projects = []
+        lines = [line.strip() for line in resume_text.split('\n') if line.strip()]
+        in_projects = False
+        for line in lines:
+            clean_line = line.upper().replace(":", "").replace("-", "").strip()
+            if clean_line in ["PROJECTS", "PROJECT", "PERSONAL PROJECTS", "ACADEMIC PROJECTS", "KEY PROJECTS", "PROJECTS WORKED ON"]:
+                in_projects = True
+                continue
+            if in_projects:
+                if clean_line in ["EXPERIENCE", "WORK EXPERIENCE", "EMPLOYMENT", "PROFESSIONAL EXPERIENCE", "TECHNICAL SKILLS", "ACHIEVEMENTS", "EDUCATION", "CODING PROFILES", "LANGUAGES", "SKILLS", "INTERNSHIPS"]:
+                    break
+                # Filter out description lines starting with bullets
+                if line.startswith("•") or line.startswith("-") or line.startswith("*"):
+                    continue
+                parts = line.split('|')
+                if len(parts) > 1 or '/' in line or '–' in line:
+                    name = line.split('/')[0].split('|')[0].split('–')[0].strip()
+                    name_words = name.split()
+                    if 0 < len(name_words) <= 3:
+                        projects.append(name)
+
+        # 3. Extract Experience (Companies)
+        companies = []
+        in_exp = False
+        for line in lines:
+            clean_line = line.upper().replace(":", "").replace("-", "").strip()
+            if clean_line in ["EXPERIENCE", "PROFESSIONAL EXPERIENCE", "WORK EXPERIENCE", "INTERNSHIPS", "EMPLOYMENT HISTORY"]:
+                in_exp = True
+                continue
+            if in_exp:
+                if clean_line in ["PROJECTS", "PERSONAL PROJECTS", "TECHNICAL SKILLS", "ACHIEVEMENTS", "EDUCATION", "CODING PROFILES", "LANGUAGES", "SKILLS"]:
+                    break
+                if line.startswith("•") or line.startswith("-") or line.startswith("*"):
+                    continue
+                parts = line.split(',')
+                if len(parts) > 1 or '–' in line:
+                    name = line.split(',')[0].split('–')[0].strip()
+                    name_words = name.split()
+                    if 0 < len(name_words) <= 4:
+                        companies.append(name)
+
+        # Set sensible defaults if parsing couldn't find anything
+        if not projects:
+            projects = ["ModelSmith", "InterviewForge", "CloudCommerce"]
+        if not companies:
+            companies = ["LITSS", "TechInnovate Solutions"]
+            
+        target_title = job_title if job_title else "Software Engineer Intern"
+        target_company = company_name if company_name else "ARM"
+
+        # Expand arrays to avoid index out of bounds
+        while len(projects) < 3:
+            projects.append(projects[0] if projects else "InterviewForge")
+        while len(companies) < 2:
+            companies.append(companies[0] if companies else "LITSS")
+            
+        if interview_type == "HR":
+            hr_questions = [
+                ("Describe a time when you disagreed with a colleague on a technical decision. How did you resolve it?", ["disagreement", "resolution", "communication", "teamwork"]),
+                ("Why are you interested in joining {company} as a {job_title}?", ["motivation", "career goals", "interest", target_company]),
+                ("Tell me about a time you had to learn a new technology quickly to solve a problem.", ["learning", "adaptability", "quick learning"]),
+                ("Where do you see yourself in five years professionally?", ["growth", "future goals", "career path"]),
+                ("How do you handle working under tight deadlines and high-pressure scenarios?", ["stress management", "prioritization", "pressure"])
+            ]
+            for text, kw in hr_questions:
+                questions.append(GeneratedQuestionItem(
+                    question_text=text.format(company=target_company, job_title=target_title), 
+                    category="HR", 
+                    difficulty=difficulty, 
+                    expected_keywords=kw
+                ))
+        else:
+            # Formulate 4 Resume-specific questions dynamically
+            resume_templates = [
+                "In your project {proj}, how did you design the architecture to support {skill}?",
+                "What were the biggest scaling challenges you encountered while implementing {proj}?",
+                "When developing {proj}, why did you choose {skill} over alternative technologies?",
+                "Can you describe a major debugging challenge you faced in {proj} and how you fixed it?",
+                "In your experience at {comp}, how did you integrate {skill} to improve performance or security?",
+                "How did you collaborate with your team at {comp} to establish best practices in {skill}?",
+                "For the features you built in {proj}, how did you handle data validation and validation schemas?"
+            ]
+            for i in range(4):
+                skill = candidate_skills[i % len(candidate_skills)]
+                proj = projects[i % len(projects)]
+                comp = companies[i % len(companies)]
+                text = resume_templates[i % len(resume_templates)].format(skill=skill, proj=proj, comp=comp)
+                questions.append(GeneratedQuestionItem(
+                    question_text=text,
+                    category="RESUME",
+                    difficulty=difficulty,
+                    expected_keywords=[skill, proj, "architecture"]
+                ))
+     
+            # Formulate 4 Technical questions dynamically matching the target job description details
+            tech_templates = [
+                "As a {job_title} at {company}, what are the best practices for structuring a production-ready application using {skill}?",
+                "How does concurrency and multi-threading work under the hood in {skill}?",
+                "Explain how dependency injection or module management is handled in {skill}.",
+                "What are the common memory leak patterns or bottlenecks in {skill} and how do you prevent them?",
+                "How do you handle database connections or session lifecycles in {skill}?",
+                "Explain the difference between synchronous and asynchronous operations in {skill}."
+            ]
+            for i in range(4):
+                skill = job_skills[i % len(job_skills)]
+                text = tech_templates[i % len(tech_templates)].format(
+                    job_title=target_title, 
+                    company=target_company, 
+                    skill=skill
+                )
+                questions.append(GeneratedQuestionItem(
+                    question_text=text,
+                    category="TECHNICAL",
+                    difficulty=difficulty,
+                    expected_keywords=[skill, "architecture", "best practices"]
+                ))
+     
+            # 2 DSA questions
+            dsa_questions = [
+                ("Explain how to find the longest substring without repeating characters. What is the time complexity?", ["longest substring", "sliding window", "hash set", "O(N)"]),
+                ("How do you detect a cycle in a linked list? Describe Floyd's Cycle Finding algorithm.", ["linked list cycle", "Floyd's algorithm", "two pointers", "slow and fast"])
+            ]
+            for text, kw in dsa_questions:
+                questions.append(GeneratedQuestionItem(question_text=text, category="DSA", difficulty=difficulty, expected_keywords=kw))
  
         return QuestionGenerationResponse(questions=questions)
  

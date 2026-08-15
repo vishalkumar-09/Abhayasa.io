@@ -7,6 +7,9 @@ class QuestionGenerationRequest(BaseModel):
     job_description_text: str = Field(validation_alias="jobDescriptionText", description="The target job description requirements")
     difficulty: Optional[str] = Field("MID", description="Target difficulty level: JUNIOR, MID, or SENIOR")
     resume_id: Optional[int] = Field(None, validation_alias="resumeId", description="Optional DB resume ID to retrieve semantically parsed vector context")
+    job_title: Optional[str] = Field(None, validation_alias="jobTitle", description="The target job title")
+    company_name: Optional[str] = Field(None, validation_alias="companyName", description="The target company name")
+    interview_type: Optional[str] = Field("TECHNICAL", validation_alias="interviewType", description="The type of interview: TECHNICAL or HR")
 
 class GeneratedQuestionItem(BaseModel):
     question_text: str = Field(description="The formulated interview question")

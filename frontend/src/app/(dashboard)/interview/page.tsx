@@ -22,6 +22,7 @@ export default function InterviewLauncherPage() {
   const router = useRouter();
   const [selectedResumeId, setSelectedResumeId] = useState<number | "">("");
   const [selectedJobId, setSelectedJobId] = useState<number | "">("");
+  const [interviewType, setInterviewType] = useState<"TECHNICAL" | "HR">("TECHNICAL");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Queries
@@ -51,8 +52,12 @@ export default function InterviewLauncherPage() {
 
   // Start interview mutation
   const startMutation = useMutation({
-    mutationFn: async (req: { resumeId: number; jobDescriptionId: number }) => {
-      const res = await apiClient.post("/api/v1/interviews", req);
+    mutationFn: async (req: { resumeId: number; jobDescriptionId: number; interviewType: string }) => {
+      const res = await apiClient.post("/api/v1/interviews", {
+        resumeId: req.resumeId,
+        jobDescriptionId: req.jobDescriptionId,
+        interviewType: req.interviewType,
+      });
       return res.data;
     },
     onSuccess: (data) => {
@@ -79,6 +84,7 @@ export default function InterviewLauncherPage() {
     startMutation.mutate({
       resumeId: Number(selectedResumeId),
       jobDescriptionId: Number(selectedJobId),
+      interviewType: interviewType,
     });
   };
 
@@ -184,6 +190,44 @@ export default function InterviewLauncherPage() {
                   </select>
                 </div>
 
+                {/* Interview Type Selection */}
+                <div className="flex flex-col gap-2">
+                  <span className="text-xs font-medium text-zinc-300">
+                    Select Interview Type
+                  </span>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setInterviewType("TECHNICAL")}
+                      className={`flex flex-col items-start gap-1.5 p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                        interviewType === "TECHNICAL"
+                          ? "bg-violet-600/10 border-violet-500 text-white"
+                          : "bg-zinc-950 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-white"
+                      }`}
+                    >
+                      <span className="text-xs font-bold uppercase tracking-wider">Technical</span>
+                      <span className="text-[10px] leading-relaxed text-zinc-500">
+                        2 DSA puzzles + Resume & Skill questions.
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setInterviewType("HR")}
+                      className={`flex flex-col items-start gap-1.5 p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                        interviewType === "HR"
+                          ? "bg-violet-600/10 border-violet-500 text-white"
+                          : "bg-zinc-950 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-white"
+                      }`}
+                    >
+                      <span className="text-xs font-bold uppercase tracking-wider">HR & Behavior</span>
+                      <span className="text-[10px] leading-relaxed text-zinc-500">
+                        Behavioral, situational, and cultural questions.
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
                 {/* Launch Button */}
                 <button
                   onClick={handleLaunch}
@@ -247,6 +291,15 @@ export default function InterviewLauncherPage() {
                             }`}
                           >
                             {session.status}
+                          </span>
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[9px] font-semibold tracking-wide border ${
+                              session.interviewType === "HR"
+                                ? "bg-fuchsia-500/10 border-fuchsia-500/20 text-fuchsia-400"
+                                : "bg-sky-500/10 border-sky-500/20 text-sky-400"
+                            }`}
+                          >
+                            {session.interviewType || "TECHNICAL"}
                           </span>
                         </div>
                         <p className="text-xs text-zinc-400 mt-1.5 flex flex-wrap gap-x-2 gap-y-1">

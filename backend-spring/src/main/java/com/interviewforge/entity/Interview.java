@@ -37,6 +37,10 @@ public class Interview {
     @Column(nullable = false)
     private InterviewStatus status;
 
+    @Column(name = "interview_type")
+    @Builder.Default
+    private String interviewType = "TECHNICAL";
+
     @OneToMany(mappedBy = "interview", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<Question> questions;
 

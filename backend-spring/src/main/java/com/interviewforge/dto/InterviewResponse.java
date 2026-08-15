@@ -18,5 +18,6 @@ public class InterviewResponse {
     private Long resumeId;
     private Long jobDescriptionId;
     private List<QuestionResponse> questions;
+    private String interviewType;
     private LocalDateTime createdAt;
 }

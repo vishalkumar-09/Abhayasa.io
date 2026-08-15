@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import com.interviewforge.client.AiServiceClient;
 import java.util.List;
 
 @RestController
@@ -52,6 +53,15 @@ public class InterviewController {
     @GetMapping("/{interviewId}/report")
     public ResponseEntity<ReportResponse> getInterviewReport(@PathVariable Long interviewId) {
         ReportResponse response = interviewService.getInterviewReport(interviewId);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{interviewId}/questions/{questionId}/hint")
+    public ResponseEntity<AiServiceClient.HintResponse> getHint(
+            @PathVariable Long interviewId,
+            @PathVariable Long questionId,
+            @RequestBody List<AiServiceClient.ChatMessage> chatHistory) {
+        AiServiceClient.HintResponse response = interviewService.getHint(interviewId, questionId, chatHistory);
         return ResponseEntity.ok(response);
     }
 }

@@ -70,8 +70,18 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // Allow Localhost Next.js port
-        configuration.setAllowedOrigins(List.of("http://localhost:3000"));
+        
+        // Dynamically parse allowed origins from environment variables for production
+        String allowedOriginsEnv = System.getenv("ALLOWED_ORIGINS");
+        List<String> origins = new java.util.ArrayList<>();
+        origins.add("http://localhost:3000");
+        if (allowedOriginsEnv != null && !allowedOriginsEnv.isBlank()) {
+            for (String origin : allowedOriginsEnv.split(",")) {
+                origins.add(origin.trim());
+            }
+        }
+        configuration.setAllowedOrigins(origins);
+        
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Cache-Control"));
         configuration.setExposedHeaders(List.of("Authorization"));

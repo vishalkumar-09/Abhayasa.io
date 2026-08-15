@@ -42,6 +42,9 @@ public class AiServiceClient {
     public static class QuestionGenerationRequest {
         private String resumeText;
         private String jobDescriptionText;
+        private String jobTitle;
+        private String companyName;
+        private String interviewType;
     }
 
     @Data
@@ -55,6 +58,8 @@ public class AiServiceClient {
         private String questionText;
         
         private String difficulty;
+        
+        private String category;
         
         @com.fasterxml.jackson.annotation.JsonProperty("expected_keywords")
         private List<String> expectedKeywords;
@@ -100,11 +105,14 @@ public class AiServiceClient {
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
     public static class ReportGenerationResponse {
         private BigDecimal overallScore;
         private String summary;
         private List<String> strengths;
         private List<String> weaknesses;
+        private List<String> missingConcepts;
+        private List<String> improvementRoadmap;
         private String recommendations;
     }
 
@@ -132,10 +140,13 @@ public class AiServiceClient {
         }
     }
 
-    public List<GeneratedQuestion> generateQuestions(String resumeText, String jobDescriptionText) {
+    public List<GeneratedQuestion> generateQuestions(String resumeText, String jobDescriptionText, String jobTitle, String companyName, String interviewType) {
         QuestionGenerationRequest requestBody = new QuestionGenerationRequest();
         requestBody.setResumeText(resumeText != null && !resumeText.isBlank() ? resumeText : "Generic Resume Text");
         requestBody.setJobDescriptionText(jobDescriptionText != null && !jobDescriptionText.isBlank() ? jobDescriptionText : "Generic Job Description");
+        requestBody.setJobTitle(jobTitle != null && !jobTitle.isBlank() ? jobTitle : "Software Engineer");
+        requestBody.setCompanyName(companyName != null && !companyName.isBlank() ? companyName : "the target company");
+        requestBody.setInterviewType(interviewType != null ? interviewType : "TECHNICAL");
 
         try {
             QuestionGenerationResponse response = restClient.post()
@@ -197,6 +208,44 @@ public class AiServiceClient {
                     .recommendations("Review core Servlet lifecycle processes and practice dynamic programming algorithm patterns.")
                     .build();
         }
+    }
+
+    public HintResponse getHint(String questionText, List<String> expectedKeywords, List<ChatMessage> chatHistory) {
+        HintRequest requestBody = new HintRequest(questionText, expectedKeywords, chatHistory);
+        try {
+            return restClient.post()
+                    .uri("/api/v1/get-hint")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(requestBody)
+                    .retrieve()
+                    .body(HintResponse.class);
+        } catch (Exception ex) {
+            return new HintResponse("Consider how you would structure the core logic using expected concepts: " + String.join(", ", expectedKeywords));
+        }
+    }
+
+    @Data
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class HintRequest {
+        private String question_text;
+        private List<String> expected_keywords;
+        private List<ChatMessage> chat_history;
+    }
+
+    @Data
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class HintResponse {
+        private String hint;
+    }
+
+    @Data
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class ChatMessage {
+        private String role;
+        private String text;
     }
 
     // =========================================================================
