@@ -324,4 +324,37 @@ public class InterviewService {
                 .orElseThrow(() -> new ResourceNotFoundException("Question not found"));
         return aiServiceClient.getHint(question.getQuestionText(), question.getExpectedKeywords(), chatHistory);
     }
+
+    public FollowUpResponse generateFollowUp(Long interviewId, Long questionId, FollowUpRequest request) {
+        User user = getAuthenticatedUser();
+        Interview interview = interviewRepository.findById(interviewId)
+                .orElseThrow(() -> new ResourceNotFoundException("Interview session not found with id: " + interviewId));
+        if (!Objects.equals(interview.getUser().getId(), user.getId())) {
+            throw new UnauthorizedException("You are not authorized to access this interview session.");
+        }
+        Question question = questionRepository.findById(questionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Question not found with id: " + questionId));
+        
+        String followupText = aiServiceClient.generateFollowUp(
+                question.getQuestionText(),
+                request.getAnswerText(),
+                request.getHistory()
+        );
+        return new FollowUpResponse(followupText);
+    }
+
+    @Transactional
+    public void deleteInterview(Long interviewId) {
+        User user = getAuthenticatedUser();
+        Interview interview = interviewRepository.findById(interviewId)
+                .orElseThrow(() -> new ResourceNotFoundException("Interview session not found with id: " + interviewId));
+        if (!Objects.equals(interview.getUser().getId(), user.getId())) {
+            throw new UnauthorizedException("You are not authorized to delete this interview session.");
+        }
+        interviewRepository.delete(interview);
+    }
+
+    public AiServiceClient.TranscribeResponse transcribeAudio(org.springframework.web.multipart.MultipartFile file) {
+        return aiServiceClient.transcribeAudio(file);
+    }
 }

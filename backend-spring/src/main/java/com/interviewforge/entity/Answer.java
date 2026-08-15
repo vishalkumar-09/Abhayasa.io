@@ -36,6 +36,18 @@ public class Answer {
     @Column(name = "evaluation_feedback", columnDefinition = "TEXT")
     private String evaluationFeedback;
 
+    @Column(name = "technical_score")
+    private Integer technicalScore;
+
+    @Column(name = "communication_score")
+    private Integer communicationScore;
+
+    @Column(name = "depth_score")
+    private Integer depthScore;
+
+    @Column(name = "completeness_score")
+    private Integer completenessScore;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

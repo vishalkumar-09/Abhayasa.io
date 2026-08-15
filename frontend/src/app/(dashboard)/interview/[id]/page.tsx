@@ -5,7 +5,9 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
-import Editor from "@monaco-editor/react";
+import { Editor } from "@monaco-editor/react";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { motion } from "framer-motion";
 import {
   Loader2,
   Mic,
@@ -28,6 +30,7 @@ import {
   Info,
   ChevronRight,
   MessageCircle,
+  FileText,
   X
 } from "lucide-react";
 
@@ -55,6 +58,15 @@ export default function LiveInterviewPage() {
   const [webcamStream, setWebcamStream] = useState<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
+  // Real-Time Voice Agent follow-up states
+  const [followUpCount, setFollowUpCount] = useState(0);
+  const [followUpQuestionText, setFollowUpQuestionText] = useState("");
+  const [currentBlockAnswers, setCurrentBlockAnswers] = useState<string[]>([]);
+  const [followUpQuestionsHistory, setFollowUpQuestionsHistory] = useState<string[]>([]);
+  const [isGeneratingFollowUp, setIsGeneratingFollowUp] = useState(false);
+  const lastSpokenQuestionIdRef = useRef<number | null>(null);
+  const activeSpokenTextRef = useRef<string>("");
+
   // Monaco Code Sandbox States
   const [codeContent, setCodeContent] = useState("");
   const [codeLanguage, setCodeLanguage] = useState("javascript");
@@ -69,6 +81,25 @@ export default function LiveInterviewPage() {
 
   // STAR method guide toggle
   const [activeTab, setActiveTab] = useState<"answer" | "star">("answer");
+  const [inputMode, setInputMode] = useState<"voice" | "text">("voice");
+  const [browserSupportNotice, setBrowserSupportNotice] = useState<string | null>(null);
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const baseAnswerTextRef = useRef<string>("");
+
+  // Available Neural / Natural Voices State
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [selectedVoiceUri, setSelectedVoiceUri] = useState<string>("");
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      const updateVoices = () => {
+        const available = window.speechSynthesis.getVoices().filter((v) => v.lang.startsWith("en"));
+        setVoices(available);
+      };
+      updateVoices();
+      window.speechSynthesis.onvoiceschanged = updateVoices;
+    }
+  }, []);
 
   // Fetch interview details
   const { data: interview, isLoading: loadingInterview } = useQuery({
@@ -93,6 +124,15 @@ export default function LiveInterviewPage() {
       }
     }
   }, [interviewId]);
+
+  useEffect(() => {
+    setFollowUpCount(0);
+    setFollowUpQuestionText("");
+    setCurrentBlockAnswers([]);
+    setFollowUpQuestionsHistory([]);
+    setIsGeneratingFollowUp(false);
+    activeSpokenTextRef.current = "";
+  }, [currentIdx]);
 
   // Handle active webcam stream feed
   useEffect(() => {
@@ -123,49 +163,80 @@ export default function LiveInterviewPage() {
   }, [useWebcam]);
 
   // Audio / Speech Synthesis for questions
-  const speakQuestion = (text: string) => {
+  const speakQuestion = (text?: string) => {
     if (typeof window === "undefined" || !window.speechSynthesis || isMuted) return;
 
+    const targetText = text || activeSpokenTextRef.current || followUpQuestionText || currentQuestion?.questionText;
+    if (!targetText) return;
+
+    activeSpokenTextRef.current = targetText;
+
+    // Purge any lingering main-question audio from Chrome/Edge SpeechSynthesis queue
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
 
-    // Find the highest quality English voice (Neural / Natural / Google)
-    const voices = window.speechSynthesis.getVoices();
-    let selectedVoice = voices.find(
-      (v) => v.lang === "en-US" && v.name.toLowerCase().includes("natural")
-    );
-    if (!selectedVoice) {
-      selectedVoice = voices.find(
-        (v) => v.lang === "en-US" && v.name.toLowerCase().includes("google")
-      );
-    }
-    if (!selectedVoice) {
-      selectedVoice = voices.find((v) => v.lang === "en-US");
-    }
-    if (!selectedVoice && voices.length > 0) {
-      selectedVoice = voices[0];
-    }
+    setTimeout(() => {
+      if (typeof window === "undefined" || !window.speechSynthesis) return;
 
-    if (selectedVoice) {
-      utterance.voice = selectedVoice;
-    }
-    utterance.rate = 1.05;
-    utterance.pitch = 1.0;
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(targetText);
 
-    utterance.onstart = () => setIsAiSpeaking(true);
-    utterance.onend = () => setIsAiSpeaking(false);
-    utterance.onerror = () => setIsAiSpeaking(false);
+      // Find highest quality Natural / Neural English voice
+      const allVoices = window.speechSynthesis.getVoices();
+      let selectedVoice = allVoices.find((v) => v.voiceURI === selectedVoiceUri);
 
-    window.speechSynthesis.speak(utterance);
+      if (!selectedVoice) {
+        selectedVoice =
+          allVoices.find((v) => v.lang.startsWith("en") && v.name.toLowerCase().includes("natural")) ||
+          allVoices.find((v) => v.lang.startsWith("en") && v.name.toLowerCase().includes("neural")) ||
+          allVoices.find((v) => v.lang.startsWith("en") && v.name.toLowerCase().includes("google")) ||
+          allVoices.find((v) => v.lang.startsWith("en") && v.name.toLowerCase().includes("enhanced")) ||
+          allVoices.find((v) => v.lang.startsWith("en"));
+      }
+
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+      }
+      utterance.rate = 0.95; // Calm, articulate, executive cadence
+      utterance.pitch = 1.0;
+
+      utterance.onstart = () => {
+        setIsAiSpeaking(true);
+        // Stop speech recognition when AI speaks to prevent feedback looping
+        if (isRecording && recognition) {
+          try { recognition.stop(); } catch (e) {}
+        }
+      };
+
+      utterance.onend = () => {
+        setIsAiSpeaking(false);
+        // Restart speech recognition automatically so candidate can reply instantly
+        if (isRecording && recognition) {
+          try { recognition.start(); } catch (e) {}
+        }
+      };
+
+      utterance.onerror = () => {
+        setIsAiSpeaking(false);
+        if (isRecording && recognition) {
+          try { recognition.start(); } catch (e) {}
+        }
+      };
+
+      window.speechSynthesis.speak(utterance);
+    }, 60);
   };
 
   // Speak question when question index changes or loads
   useEffect(() => {
-    if (currentQuestion && !loadingInterview) {
-      // Small timeout to allow voices to load
-      const t = setTimeout(() => {
-        speakQuestion(currentQuestion.questionText);
-      }, 500);
+    let t: any = null;
+    if (currentQuestion && !loadingInterview && followUpCount === 0) {
+      // Speak main question only when moving to a new question ID and not in follow-up mode
+      if (lastSpokenQuestionIdRef.current !== currentQuestion.id) {
+        lastSpokenQuestionIdRef.current = currentQuestion.id;
+        t = setTimeout(() => {
+          speakQuestion(currentQuestion.questionText);
+        }, 500);
+      }
 
       // Determine if coding mode is applicable (combining category attribute and keyword fallbacks)
       const textLower = currentQuestion?.questionText?.toLowerCase() || "";
@@ -214,7 +285,7 @@ export default function LiveInterviewPage() {
       ]);
 
       return () => {
-        clearTimeout(t);
+        if (t) clearTimeout(t);
         if (typeof window !== "undefined" && window.speechSynthesis) {
           window.speechSynthesis.cancel();
         }
@@ -222,20 +293,14 @@ export default function LiveInterviewPage() {
     }
   }, [currentIdx, currentQuestion, loadingInterview, isMuted]);
 
-  // Audio speech voices listener
+  // Clean up speech synthesis on unmount
   useEffect(() => {
-    if (typeof window !== "undefined" && window.speechSynthesis) {
-      const handleVoices = () => {
-        if (currentQuestion) speakQuestion(currentQuestion.questionText);
-      };
-      window.speechSynthesis.onvoiceschanged = handleVoices;
-      return () => {
-        if (window.speechSynthesis) {
-          window.speechSynthesis.onvoiceschanged = null;
-        }
-      };
-    }
-  }, [currentQuestion]);
+    return () => {
+      if (typeof window !== "undefined" && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
 
   // Sync Monaco editor text to submitted answerText state
   useEffect(() => {
@@ -260,32 +325,21 @@ export default function LiveInterviewPage() {
         recog.interimResults = true;
         recog.lang = "en-US";
 
-        let finalTranscript = "";
-
-        recog.onstart = () => {
-          finalTranscript = "";
-        };
-
         recog.onresult = (event: any) => {
-          let interimTranscript = "";
-          for (let i = event.resultIndex; i < event.results.length; ++i) {
-            const transcript = event.results[i][0].transcript;
-            if (event.results[i].isFinal) {
-              finalTranscript += transcript + " ";
-            } else {
-              interimTranscript += transcript;
-            }
+          let spoken = "";
+          for (let i = 0; i < event.results.length; i++) {
+            spoken += event.results[i][0].transcript;
           }
-          const combined = finalTranscript + interimTranscript;
-          if (combined.trim()) {
-            if (isCodingMode) {
-              setCodeContent((prev) => {
-                const baseCode = prev.split("\n// Spoken explanation:")[0];
-                return baseCode.trim() + `\n// Spoken explanation: ${combined.trim()}`;
-              });
-            } else {
-              setAnswerText(combined.trim());
-            }
+          const base = baseAnswerTextRef.current;
+          const updated = base ? base.trim() + " " + spoken.trim() : spoken.trim();
+
+          if (isCodingMode) {
+            setCodeContent((prev) => {
+              const baseCode = prev.split("\n// Spoken explanation:")[0];
+              return baseCode.trim() + `\n// Spoken explanation: ${updated}`;
+            });
+          } else {
+            setAnswerText(updated);
           }
         };
 
@@ -298,6 +352,9 @@ export default function LiveInterviewPage() {
         };
 
         setRecognition(recog);
+      } else {
+        setBrowserSupportNotice("Voice dictation is limited on this browser. You can type your answers directly in Text Mode.");
+        setInputMode("text");
       }
     }
   }, [isCodingMode]);
@@ -359,29 +416,75 @@ export default function LiveInterviewPage() {
     },
   });
 
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
   const startRecording = async () => {
     setErrorMsg(null);
-    if (!recognition) {
-      setErrorMsg("Voice recognition is not supported in this browser. Please try Chrome or Edge.");
-      return;
-    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       setAudioStream(stream);
       setIsRecording(true);
-      recognition.start();
+
+      // Cross-platform MediaRecorder setup for Safari, Chrome Mobile, Firefox & Edge
+      audioChunksRef.current = [];
+      const mimeType = typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("audio/webm")
+        ? "audio/webm"
+        : typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("audio/mp4")
+        ? "audio/mp4"
+        : "";
+      
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        // Fallback audio transcription via Gemini only if browser Web Speech API is unavailable
+        if (!recognition && audioChunksRef.current.length > 0) {
+          const blobType = recorder.mimeType || "audio/webm";
+          const audioBlob = new Blob(audioChunksRef.current, { type: blobType });
+          const formData = new FormData();
+          formData.append("file", audioBlob, `speech.${blobType.includes("mp4") ? "mp4" : "webm"}`);
+
+          try {
+            const res = await apiClient.post("/api/v1/interviews/transcribe-audio", formData, {
+              headers: { "Content-Type": "multipart/form-data" },
+            });
+            if (res.data?.transcript && res.data.transcript.trim()) {
+              const text = res.data.transcript.trim();
+              setAnswerText((prev) => (prev ? prev + " " + text : text));
+            }
+          } catch (err) {
+            console.error("Audio transcription error:", err);
+          }
+        }
+      };
+
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+
+      baseAnswerTextRef.current = answerText;
+
+      if (recognition) {
+        try { recognition.start(); } catch (e) {}
+      }
     } catch (err) {
-      console.error("Microphone access denied:", err);
-      setErrorMsg("Microphone access denied. Please allow microphone permissions.");
+      console.error("Microphone access error:", err);
+      setErrorMsg("Microphone access denied or unsupported. Please enable mic permissions.");
     }
   };
 
   const stopRecording = () => {
     setIsRecording(false);
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      try { mediaRecorderRef.current.stop(); } catch (e) {}
+    }
     if (recognition) {
-      try {
-        recognition.stop();
-      } catch (e) {}
+      try { recognition.stop(); } catch (e) {}
     }
     if (audioStream) {
       audioStream.getTracks().forEach((track) => track.stop());
@@ -475,29 +578,91 @@ export default function LiveInterviewPage() {
     }
   };
 
-  const handleAnswerSubmit = () => {
+  const handleAnswerSubmit = async () => {
     if (!answerText.trim()) {
       setErrorMsg("Please type or record an answer before submitting.");
       return;
     }
+    
+    // Mute microphone while processing
+    const wasRecording = isRecording;
+    if (isRecording) {
+      stopRecording();
+    }
+
+    if (followUpCount < 2) {
+      setIsGeneratingFollowUp(true);
+      setErrorMsg(null);
+      
+      const updatedAnswers = [...currentBlockAnswers, answerText];
+      const updatedHistory = [...followUpQuestionsHistory];
+      
+      try {
+        const res = await apiClient.post(
+          `/api/v1/interviews/${interviewId}/questions/${currentQuestion.id}/followup`,
+          {
+            answerText: answerText,
+            history: updatedHistory
+          }
+        );
+        
+        const nextFollowUp = res.data.followupQuestion;
+        
+        // Append response and updated question history
+        setCurrentBlockAnswers(updatedAnswers);
+        setFollowUpQuestionsHistory([...updatedHistory, nextFollowUp]);
+        setFollowUpQuestionText(nextFollowUp);
+        setFollowUpCount(prev => prev + 1);
+        
+        // Reset answer fields
+        setAnswerText("");
+        setCodeContent("");
+        
+        // Speak follow-up question
+        activeSpokenTextRef.current = nextFollowUp;
+        speakQuestion(nextFollowUp);
+        
+        // Re-enable microphone automatically if they were recording
+        if (wasRecording) {
+          setTimeout(() => {
+            startRecording();
+          }, 800);
+        }
+        
+      } catch (err: any) {
+        console.error(err);
+        setErrorMsg("Failed to generate follow-up question. Skipping to next question.");
+        submitFinalAnswer(updatedAnswers, updatedHistory);
+      } finally {
+        setIsGeneratingFollowUp(false);
+      }
+    } else {
+      const finalAnswers = [...currentBlockAnswers, answerText];
+      submitFinalAnswer(finalAnswers, followUpQuestionsHistory);
+    }
+  };
+
+  const submitFinalAnswer = (answersList: string[], historyList: string[]) => {
+    let concatenatedText = `Main Response: ${answersList[0] || ""}`;
+    if (answersList.length > 1 && historyList.length > 0) {
+      concatenatedText += `\n\nFollow-up 1: ${historyList[0]}\nResponse: ${answersList[1]}`;
+    }
+    if (answersList.length > 2 && historyList.length > 1) {
+      concatenatedText += `\n\nFollow-up 2: ${historyList[1]}\nResponse: ${answersList[2]}`;
+    }
+
     submitAnswerMutation.mutate({
       questionId: currentQuestion.id,
-      answerText: answerText,
+      answerText: concatenatedText,
     });
   };
 
   const handleCompleteEarly = () => {
-    if (
-      confirm(
-        "Are you sure you want to end this interview session early? All submitted answers will still be evaluated and aggregated into your report."
-      )
-    ) {
-      completeInterviewMutation.mutate();
-    }
+    setShowCompleteModal(true);
   };
 
   return (
-    <div className="relative min-h-[80vh] flex flex-col gap-6">
+    <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="relative min-h-[80vh] flex flex-col gap-6">
       
       {/* Top Header Status */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-zinc-950/40 border border-zinc-900 rounded-2xl p-4 md:px-6">
@@ -593,8 +758,26 @@ export default function LiveInterviewPage() {
               })}
             </div>
 
+            {/* Voice Accent & Model Selector Dropdown */}
+            {voices.length > 0 && (
+              <div className="w-full px-2 mt-1">
+                <select
+                  value={selectedVoiceUri}
+                  onChange={(e) => setSelectedVoiceUri(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-300 rounded-lg p-1.5 outline-none focus:border-violet-500 cursor-pointer text-center"
+                >
+                  <option value="">🎙️ Auto (Neural / Natural Voice)</option>
+                  {voices.map((v) => (
+                    <option key={v.voiceURI} value={v.voiceURI}>
+                      {v.name} ({v.lang})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <button
-              onClick={() => speakQuestion(currentQuestion?.questionText)}
+              onClick={() => speakQuestion(followUpQuestionText || currentQuestion?.questionText)}
               className="text-[10px] text-zinc-500 hover:text-zinc-300 font-semibold transition-colors flex items-center gap-1 bg-zinc-950/40 hover:bg-zinc-900 border border-zinc-900 px-2.5 py-1 rounded-lg cursor-pointer"
             >
               <Volume2 className="h-3 w-3" />
@@ -712,7 +895,7 @@ export default function LiveInterviewPage() {
               <div className="flex items-center gap-2">
                 <Sparkles className="h-4.5 w-4.5 text-violet-400 animate-pulse" />
                 <span className="text-[10px] text-zinc-400 font-bold tracking-wider uppercase">
-                  Question {currentIdx + 1} of {totalQuestions}
+                  {followUpCount > 0 ? `Follow-up ${followUpCount} of 2` : `Question ${currentIdx + 1} of ${totalQuestions}`}
                 </span>
               </div>
               <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border ${
@@ -725,14 +908,14 @@ export default function LiveInterviewPage() {
                 {currentQuestion?.difficulty} Level
               </span>
             </div>
-
+ 
             <div className="p-6 md:p-7 flex items-start gap-4">
               <div className="p-2.5 rounded-xl bg-violet-600/15 border border-violet-500/20 text-violet-400 shrink-0">
                 <MessageSquare className="h-5.5 w-5.5" />
               </div>
               <div className="flex-1">
                 <h3 className="text-base md:text-lg font-medium text-white leading-relaxed">
-                  {currentQuestion?.questionText}
+                  {followUpQuestionText || currentQuestion?.questionText}
                 </h3>
               </div>
             </div>
@@ -750,17 +933,27 @@ export default function LiveInterviewPage() {
             >
               Response Desk
             </button>
-            <button
-              onClick={() => setActiveTab("star")}
-              className={`pb-2 px-3 text-xs font-semibold transition-all border-b-2 ${
-                activeTab === "star"
-                  ? "border-violet-500 text-violet-400"
-                  : "border-transparent text-zinc-500 hover:text-zinc-300"
-              }`}
-            >
-              💡 STAR Method Guide
-            </button>
+            {(interview?.interviewType === "HR" || interview?.interviewType === "BEHAVIORAL") && (
+              <button
+                onClick={() => setActiveTab("star")}
+                className={`pb-2 px-3 text-xs font-semibold transition-all border-b-2 ${
+                  activeTab === "star"
+                    ? "border-violet-500 text-violet-400"
+                    : "border-transparent text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                💡 STAR Method Guide
+              </button>
+            )}
           </div>
+
+          {/* Browser Support Notice Banner */}
+          {browserSupportNotice && (
+            <div className="bg-amber-500/10 border border-amber-500/20 text-amber-300 px-4 py-2 rounded-xl text-xs flex items-center gap-2">
+              <Info className="h-4 w-4 shrink-0 text-amber-400" />
+              <span>{browserSupportNotice}</span>
+            </div>
+          )}
 
           {/* Tab Content: STAR Helper */}
           {activeTab === "star" && (
@@ -874,38 +1067,74 @@ export default function LiveInterviewPage() {
                   </div>
                 </div>
               ) : (
-                /* REGULAR TEXT RESPONSE WORKSPACE */
+                /* REGULAR TEXT RESPONSE WORKSPACE WITH VOICE / TEXT TOGGLE */
                 <div className="glass-card rounded-2xl p-5 border border-zinc-800/80 flex flex-col gap-4">
-                  <div className="flex justify-between items-center">
-                    <h4 className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Your Explanation</h4>
+                  <div className="flex justify-between items-center pb-2 border-b border-zinc-900">
                     <div className="flex items-center gap-2">
-                      {isRecording ? (
-                        <button
-                          onClick={stopRecording}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 hover:border-red-500/30 text-red-400 text-xs font-semibold cursor-pointer animate-pulse"
-                        >
-                          <MicOff className="h-3.5 w-3.5" />
-                          Stop Recording
-                        </button>
-                      ) : (
-                        <button
-                          onClick={startRecording}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600/15 border border-violet-500/20 hover:border-violet-500/30 text-violet-300 hover:text-violet-200 text-xs font-semibold cursor-pointer transition-colors"
-                        >
-                          <Mic className="h-3.5 w-3.5" />
-                          Record Answer (Voice)
-                        </button>
-                      )}
+                      <button
+                        onClick={() => setInputMode("voice")}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                          inputMode === "voice"
+                            ? "bg-violet-600 text-white shadow-md shadow-violet-600/20"
+                            : "bg-zinc-900 text-zinc-400 hover:text-white"
+                        }`}
+                      >
+                        <Mic className="h-3.5 w-3.5" />
+                        Voice Agent Mode
+                      </button>
+                      <button
+                        onClick={() => setInputMode("text")}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                          inputMode === "text"
+                            ? "bg-violet-600 text-white shadow-md shadow-violet-600/20"
+                            : "bg-zinc-900 text-zinc-400 hover:text-white"
+                        }`}
+                      >
+                        <FileText className="h-3.5 w-3.5" />
+                        Text Typing Mode
+                      </button>
                     </div>
+
+                    {inputMode === "voice" && (
+                      <div className="flex items-center gap-2">
+                        {isRecording ? (
+                          <button
+                            onClick={stopRecording}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 hover:border-red-500/30 text-red-400 text-xs font-semibold cursor-pointer animate-pulse"
+                          >
+                            <MicOff className="h-3.5 w-3.5" />
+                            Stop Dictation
+                          </button>
+                        ) : (
+                          <button
+                            onClick={startRecording}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600/15 border border-violet-500/20 hover:border-violet-500/30 text-violet-300 hover:text-violet-200 text-xs font-semibold cursor-pointer transition-colors"
+                          >
+                            <Mic className="h-3.5 w-3.5" />
+                            Start Voice Dictation
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <textarea
                     value={answerText}
                     onChange={(e) => setAnswerText(e.target.value)}
                     rows={7}
-                    placeholder="Provide a detailed technical description. Click the voice recorder button to speak your answer and perform real-time speech-to-text dictation..."
+                    placeholder={
+                      inputMode === "voice"
+                        ? "Click 'Start Voice Dictation' to speak your answer, or type directly here..."
+                        : "Type your detailed technical response here. Ensure to cover core concepts, design trade-offs, and examples..."
+                    }
                     className="w-full px-4 py-3 rounded-xl bg-zinc-950/50 border border-zinc-850 text-white placeholder-zinc-650 text-sm outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-all resize-y min-h-[160px]"
                   />
+
+                  {answerText.trim().length > 0 && answerText.trim().length < 10 && (
+                    <p className="text-[11px] text-amber-400 font-medium">
+                      ⚠️ Please enter at least 10 characters for a valid interview response.
+                    </p>
+                  )}
 
                   {isRecording && (
                     <div className="flex items-center gap-3 py-1 px-2.5 rounded-lg bg-violet-900/10 border border-violet-500/20 w-fit animate-pulse">
@@ -940,11 +1169,35 @@ export default function LiveInterviewPage() {
 
                 <button
                   onClick={handleAnswerSubmit}
-                  disabled={submitAnswerMutation.isPending || !answerText.trim()}
-                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 active:bg-violet-700 text-white font-bold text-xs transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-lg shadow-violet-600/25"
+                  disabled={submitAnswerMutation.isPending || isGeneratingFollowUp || answerText.trim().length < 10}
+                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 active:bg-violet-700 text-white font-bold text-xs transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-lg shadow-violet-600/25 animate-pulse"
                 >
-                  {isLastQuestion ? "Submit & Complete" : "Submit Answer"}
-                  <Send className="h-3.5 w-3.5 fill-current" />
+                  {submitAnswerMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Saving Evaluation...
+                    </>
+                  ) : isGeneratingFollowUp ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      AI Interviewer is thinking...
+                    </>
+                  ) : followUpCount < 2 ? (
+                    <>
+                      Submit Answer (Follow-up {followUpCount + 1}/2)
+                      <Send className="h-3.5 w-3.5 fill-current" />
+                    </>
+                  ) : isLastQuestion ? (
+                    <>
+                      Submit & Complete
+                      <Send className="h-3.5 w-3.5 fill-current" />
+                    </>
+                  ) : (
+                    <>
+                      Submit & Move Next
+                      <Send className="h-3.5 w-3.5 fill-current" />
+                    </>
+                  )}
                 </button>
               </div>
 
@@ -1030,6 +1283,21 @@ export default function LiveInterviewPage() {
         </div>
       )}
 
-    </div>
+      {/* Confirm End Interview Early Modal */}
+      <ConfirmModal
+        isOpen={showCompleteModal}
+        onClose={() => setShowCompleteModal(false)}
+        onConfirm={() => {
+          setShowCompleteModal(false);
+          completeInterviewMutation.mutate();
+        }}
+        title="End Interview Session Early?"
+        description="Are you sure you want to end this interview session early? All submitted answers will be evaluated and aggregated into your performance report."
+        confirmText="End Session & Generate Report"
+        cancelText="Continue Interview"
+        variant="info"
+        isLoading={completeInterviewMutation.isPending}
+      />
+    </motion.div>
   );
 }

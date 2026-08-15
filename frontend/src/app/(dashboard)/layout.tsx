@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import {
   LayoutDashboard,
   FileText,
@@ -36,15 +37,15 @@ export default function DashboardLayout({
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-white flex">
+    <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] flex transition-colors duration-300">
       {/* Background glow effects */}
       <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-violet-600/5 rounded-full blur-[100px] pointer-events-none" />
       <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-fuchsia-600/5 rounded-full blur-[100px] pointer-events-none" />
 
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex flex-col w-64 bg-zinc-950 border-r border-zinc-800/80 shrink-0 z-20">
+      <aside className="hidden md:flex flex-col w-64 bg-[var(--card)] border-r border-[var(--border)] shrink-0 z-20 transition-colors">
         {/* Brand Logo */}
-        <div className="h-16 flex items-center px-6 border-b border-zinc-800/80">
+        <div className="h-16 flex items-center px-6 border-b border-[var(--border)]">
           <Link href="/dashboard" className="flex items-center gap-2 group">
             <div className="p-1.5 rounded-lg bg-violet-600/10 border border-violet-500/20 group-hover:border-violet-500/40 transition-all">
               <ShieldCheck className="h-5 w-5 text-violet-400" />
@@ -177,7 +178,7 @@ export default function DashboardLayout({
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 relative z-10">
         {/* Mobile Header */}
-        <header className="h-16 border-b border-zinc-800/60 bg-zinc-950/60 backdrop-blur-md flex items-center justify-between px-4 md:px-8 shrink-0">
+        <header className="h-16 border-b border-[var(--border)] bg-[var(--card)]/80 backdrop-blur-md flex items-center justify-between px-4 md:px-8 shrink-0 transition-colors">
           <div className="flex items-center gap-4">
             <button
               onClick={toggleSidebar}
@@ -185,16 +186,19 @@ export default function DashboardLayout({
             >
               <Menu className="h-5 w-5" />
             </button>
-            <h1 className="text-base font-semibold text-zinc-200 capitalize">
+            <h1 className="text-base font-semibold text-[var(--foreground)] capitalize">
               {pathname === "/dashboard"
                 ? "Overview"
                 : pathname.split("/")[1]?.replace("-", " ") || "InterviewForge"}
             </h1>
           </div>
 
-          <div className="flex items-center gap-4">
-            {/* Quick status indicator or visual ornament */}
-            <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+          <div className="flex items-center gap-3">
+            {/* Theme Toggle Button */}
+            <ThemeToggle />
+
+            {/* Quick status indicator */}
+            <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
               AI Engine Online
             </span>

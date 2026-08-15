@@ -14,6 +14,8 @@ import {
   Tag,
   AlignLeft
 } from "lucide-react";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { motion } from "framer-motion";
 
 export default function JobDescriptionPage() {
   const queryClient = useQueryClient();
@@ -24,6 +26,7 @@ export default function JobDescriptionPage() {
   });
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [deleteTargetJob, setDeleteTargetJob] = useState<{ id: number; title: string } | null>(null);
 
   // Query: Get user's configured job descriptions
   const { data: jobs = [], isLoading: loadingJobs } = useQuery({
@@ -91,9 +94,9 @@ export default function JobDescriptionPage() {
   };
 
   return (
-    <div className="flex flex-col gap-8">
+    <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="flex flex-col gap-8">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight text-white">Target Job Descriptions</h2>
+        <h2 className="text-2xl font-bold tracking-tight text-[var(--foreground)]">Target Job Descriptions</h2>
         <p className="text-sm text-zinc-400 mt-1">
           Add the descriptions of the roles you are applying for. The simulator will structure its evaluation based on these requirements.
         </p>
@@ -252,9 +255,7 @@ export default function JobDescriptionPage() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (confirm(`Are you sure you want to delete ${job.title}?`)) {
-                          deleteMutation.mutate(job.id);
-                        }
+                        setDeleteTargetJob({ id: job.id, title: job.title });
                       }}
                       disabled={deleteMutation.isPending}
                       className="p-2 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-500/5 border border-transparent hover:border-red-500/10 transition-colors disabled:opacity-50 cursor-pointer"
@@ -288,6 +289,23 @@ export default function JobDescriptionPage() {
           )}
         </div>
       </div>
-    </div>
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={deleteTargetJob !== null}
+        onClose={() => setDeleteTargetJob(null)}
+        onConfirm={() => {
+          if (deleteTargetJob) {
+            deleteMutation.mutate(deleteTargetJob.id);
+            setDeleteTargetJob(null);
+          }
+        }}
+        title={`Delete "${deleteTargetJob?.title}"?`}
+        description="Are you sure you want to delete this target job description? It will be removed from your saved target roles."
+        confirmText="Delete Job Description"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={deleteMutation.isPending}
+      />
+    </motion.div>
   );
 }

@@ -13,6 +13,8 @@ import {
   ShieldCheck,
   Tag
 } from "lucide-react";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { motion } from "framer-motion";
 
 export default function UploadResumePage() {
   const queryClient = useQueryClient();
@@ -21,6 +23,7 @@ export default function UploadResumePage() {
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [deleteTargetResume, setDeleteTargetResume] = useState<{ id: number; name: string } | null>(null);
 
   // Query: Get user resumes
   const { data: resumes = [], isLoading: loadingResumes } = useQuery({
@@ -114,14 +117,14 @@ export default function UploadResumePage() {
       return;
     }
 
-    setUploadProgress(10); // Artificial progress indicator start
+    setUploadProgress(20);
     uploadMutation.mutate(file);
   };
 
   return (
-    <div className="flex flex-col gap-8">
+    <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="flex flex-col gap-8">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight text-white">Manage Resumes</h2>
+        <h2 className="text-2xl font-bold tracking-tight text-[var(--foreground)]">Manage Resumes</h2>
         <p className="text-sm text-zinc-400 mt-1">
           Upload your resume files. Our Gemini AI parses them to build context for your mock interview sessions.
         </p>
@@ -241,9 +244,7 @@ export default function UploadResumePage() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (confirm(`Are you sure you want to delete ${resume.fileName}?`)) {
-                          deleteMutation.mutate(resume.id);
-                        }
+                        setDeleteTargetResume({ id: resume.id, name: resume.fileName });
                       }}
                       disabled={deleteMutation.isPending}
                       className="p-2 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-500/5 border border-transparent hover:border-red-500/10 transition-colors disabled:opacity-50 cursor-pointer"
@@ -277,6 +278,23 @@ export default function UploadResumePage() {
           )}
         </div>
       </div>
-    </div>
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={deleteTargetResume !== null}
+        onClose={() => setDeleteTargetResume(null)}
+        onConfirm={() => {
+          if (deleteTargetResume) {
+            deleteMutation.mutate(deleteTargetResume.id);
+            setDeleteTargetResume(null);
+          }
+        }}
+        title={`Delete "${deleteTargetResume?.name}"?`}
+        description="Are you sure you want to delete this resume? It will be removed from your profile and will no longer be used for AI question tailoring."
+        confirmText="Delete Resume"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={deleteMutation.isPending}
+      />
+    </motion.div>
   );
 }

@@ -6,24 +6,81 @@ from app.schemas.parser import ResumeParsingResponse, StructuredResumeData
 
 logger = logging.getLogger("app")
 
-# Configure Google Generative AI
-if settings.GEMINI_API_KEY and settings.GEMINI_API_KEY != "YOUR_GEMINI_API_KEY":
-    try:
-        genai.configure(api_key=settings.GEMINI_API_KEY)
-        logger.info("Gemini API configured successfully.")
-    except Exception as e:
-        logger.error("Failed to configure Gemini API: %s", str(e))
-else:
-    logger.warning("GEMINI_API_KEY is not set. The parser will run in mock fallback mode.")
+# Models ordered by preference and active quota
+FALLBACK_MODELS = ["gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash"]
+
+def get_api_keys() -> list[str]:
+    raw_keys = settings.GEMINI_API_KEY or ""
+    keys = [k.strip() for k in raw_keys.split(",") if k.strip() and k.strip() != "YOUR_GEMINI_API_KEY"]
+    return keys
+
+def resilient_generate_content(prompt: str, generation_config: dict = None):
+    """Executes Gemini content generation across a multi-key pool and multi-model fallback chain."""
+    keys = get_api_keys()
+    if not keys:
+        raise ValueError("No valid Gemini API key configured.")
+
+    last_exception = None
+    for key in keys:
+        genai.configure(api_key=key)
+        for model_name in FALLBACK_MODELS:
+            try:
+                model = genai.GenerativeModel(model_name)
+                if generation_config:
+                    res = model.generate_content(prompt, generation_config=generation_config)
+                else:
+                    res = model.generate_content(prompt)
+                return res
+            except Exception as e:
+                err_msg = str(e)
+                if "429" in err_msg or "Quota" in err_msg or "404" in err_msg:
+                    logger.warning("Gemini model %s with key ended in quota/error (%s). Trying fallback...", model_name, err_msg[:100])
+                    last_exception = e
+                    continue
+                else:
+                    # Non-quota error (e.g. prompt safety block)
+                    raise e
+    if last_exception:
+        raise last_exception
+    raise RuntimeError("All Gemini API keys and models exhausted.")
 
 class GeminiClient:
     def __init__(self):
+        self.is_ready = len(get_api_keys()) > 0
         try:
-            self.model = genai.GenerativeModel(settings.GEMINI_MODEL)
-            self.is_ready = True
+            primary_key = get_api_keys()[0] if self.is_ready else ""
+            if primary_key:
+                genai.configure(api_key=primary_key)
+                self.model = genai.GenerativeModel(settings.GEMINI_MODEL)
         except Exception as e:
-            logger.error("Failed to initialize GenerativeModel: %s", str(e))
-            self.is_ready = False
+            logger.error("Failed to initialize primary GenerativeModel: %s", str(e))
+
+    def _extract_skills_fallback(self, resume_text: str) -> list:
+        """Fallback method to scan resume text for known technical skills when the AI is offline or rate-limited."""
+        if not resume_text:
+            return []
+            
+        known_techs = [
+            "Java", "Python", "C++", "C#", "Go", "Golang", "Rust", "Ruby", "PHP", "Swift", "Kotlin", 
+            "TypeScript", "JavaScript", "HTML", "CSS", "SQL", "NoSQL", "PostgreSQL", "MySQL", 
+            "MongoDB", "Redis", "Oracle", "Cassandra", "DynamoDB", "Spring Boot", "Django", "Flask", 
+            "FastAPI", "Express", "NestJS", "React", "Angular", "Vue", "Next.js", "Nuxt.js", "Docker", 
+            "Kubernetes", "AWS", "Azure", "GCP", "Google Cloud", "Git", "GitHub", "GitLab", "CI/CD", 
+            "Jenkins", "REST", "GraphQL", "gRPC", "WebSockets", "Kafka", "RabbitMQ", "Microservices", 
+            "Data Structures", "Algorithms", "Machine Learning", "Deep Learning", "TensorFlow", 
+            "PyTorch", "Pandas", "NumPy", "Scikit-Learn"
+        ]
+        
+        resume_lower = resume_text.lower()
+        extracted = []
+        import re
+        for tech in known_techs:
+            # Scan using regex word boundaries to avoid false positives (e.g. "go" inside "good")
+            pattern = r'\b' + re.escape(tech.lower()) + r'\b'
+            if re.search(pattern, resume_lower):
+                extracted.append(tech)
+                
+        return extracted
 
     def parse_resume(self, resume_text: str) -> StructuredResumeData:
         """Parses raw resume text into structured JSON matching the Pydantic response schema."""
@@ -31,6 +88,9 @@ class GeminiClient:
         if not settings.GEMINI_API_KEY or settings.GEMINI_API_KEY == "YOUR_GEMINI_API_KEY" or not self.is_ready:
             logger.info("Gemini client running in mock mode. Returning mock resume parse payload.")
             mock_data = self.get_mock_parse_response()
+            dynamic_skills = self._extract_skills_fallback(resume_text)
+            if dynamic_skills:
+                mock_data["skills"] = dynamic_skills
             return StructuredResumeData(**mock_data)
 
         prompt = f"""
@@ -60,8 +120,12 @@ class GeminiClient:
             return StructuredResumeData(**parsed_json)
 
         except Exception as e:
-            logger.error("Error during Gemini API resume parsing: %s. Falling back to mock details.", str(e))
-            return StructuredResumeData(**self.get_mock_parse_response())
+            logger.error("Error during Gemini API resume parsing: %s. Falling back to dynamic/mock details.", str(e))
+            mock_data = self.get_mock_parse_response()
+            dynamic_skills = self._extract_skills_fallback(resume_text)
+            if dynamic_skills:
+                mock_data["skills"] = dynamic_skills
+            return StructuredResumeData(**mock_data)
 
     def get_mock_parse_response(self) -> dict:
         """Helper to return realistic parsed mock resume details for developer evaluation."""

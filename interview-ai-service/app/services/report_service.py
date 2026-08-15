@@ -3,6 +3,7 @@ import json
 import google.generativeai as genai
 from app.core.settings import settings
 from app.schemas.report import ReportGenerationRequest, ReportGenerationResponse
+from app.llm.gemini_client import resilient_generate_content
 
 logger = logging.getLogger("app")
 
@@ -52,7 +53,7 @@ class ReportGeneratorService:
                 "response_schema": ReportGenerationResponse
             }
 
-            response = self.model.generate_content(
+            response = resilient_generate_content(
                 prompt,
                 generation_config=generation_config
             )

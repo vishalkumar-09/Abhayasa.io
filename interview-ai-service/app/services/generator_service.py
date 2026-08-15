@@ -4,7 +4,8 @@ import google.generativeai as genai
 from typing import List
 
 from app.core.settings import settings
-from app.schemas.generator import QuestionGenerationRequest, QuestionGenerationResponse, GeneratedQuestionItem
+from app.schemas.generator import QuestionGenerationRequest, QuestionGenerationResponse, GeneratedQuestionItem, FollowUpGenerationRequest, FollowUpGenerationResponse
+from app.llm.gemini_client import resilient_generate_content
 from app.rag.retrieval import retrieval_service
 
 logger = logging.getLogger("app")
@@ -97,7 +98,7 @@ class QuestionGeneratorService:
                 "response_schema": QuestionGenerationResponse
             }
  
-            response = self.model.generate_content(
+            response = resilient_generate_content(
                 prompt,
                 generation_config=generation_config
             )
@@ -277,6 +278,106 @@ class QuestionGeneratorService:
                 questions.append(GeneratedQuestionItem(question_text=text, category="DSA", difficulty=difficulty, expected_keywords=kw))
  
         return QuestionGenerationResponse(questions=questions)
+
+    def generate_followup_fallback(self, request: FollowUpGenerationRequest) -> str:
+        """Fallback method to scan answer text and question context to output domain-tailored contextual follow-up questions."""
+        ans_text = request.answer_text.strip()
+        ans_lower = ans_text.lower()
+        q_lower = request.question_text.lower()
+
+        if "don't know" in ans_lower or "dont know" in ans_lower or "no idea" in ans_lower or len(ans_lower) < 8:
+            return "No problem. Let's pivot slightly: what core concepts or foundational principles would you consider when researching a solution for this?"
+
+        # Extract domain context (HR vs Technical vs DSA)
+        is_hr = any(k in q_lower for k in ["team", "conflict", "disagree", "challenge", "describe a time", "situation", "strength", "weakness", "leadership", "colleague", "role", "why do you", "company"])
+        is_dsa = any(k in q_lower for k in ["algorithm", "array", "tree", "graph", "complexity", "dsa", "binary", "list", "sort", "search", "function", "write a", "implement"])
+
+        # Extract candidate's key terms
+        words = [w.strip(",.()?\"'!") for w in ans_text.split() if len(w.strip(",.()?\"'!")) > 3]
+        stop_words = {
+            "would", "about", "there", "their", "project", "using", "implement", "think", "which", 
+            "because", "application", "first", "second", "also", "then", "have", "with", "from", 
+            "that", "this", "some", "like", "when", "time", "just", "make", "made", "good", "well"
+        }
+        keywords = [w for w in words if w.lower() not in stop_words]
+
+        subject = keywords[0] if keywords else "your approach"
+        secondary = keywords[1] if len(keywords) > 1 else "the outcome"
+
+        if is_hr:
+            options = [
+                f"Regarding '{subject}', what specific step did you personally take to keep the team aligned, and what did you learn from that experience?",
+                f"You mentioned '{subject}'. How did you measure the impact of that resolution on {secondary}?",
+                f"Looking back at how you handled '{subject}', is there anything you would do differently if faced with a similar challenge today?",
+                f"How did you handle communication regarding '{subject}' to ensure all stakeholders were on the same page?"
+            ]
+        elif is_dsa:
+            options = [
+                f"What are the best-case and worst-case time and space complexities of your approach involving '{subject}'?",
+                f"How would your algorithm for '{subject}' scale if the input data size grew to millions of elements?",
+                f"What potential edge cases (such as null inputs or duplicate values) might break this '{subject}' logic, and how would you handle them?",
+                f"Can you explain why you chose this specific pattern for '{subject}' instead of an alternative data structure?"
+            ]
+        else:
+            # Technical / System Design
+            options = [
+                f"What key trade-offs or architectural considerations led you to choose '{subject}' for this scenario?",
+                f"You mentioned '{subject}'. How would you handle error recovery, logging, or debugging if {secondary} fails in production?",
+                f"In a high-throughput environment, what performance bottlenecks might arise with '{subject}', and how would you optimize it?",
+                f"How do you ensure security and proper validation when configuring '{subject}'?"
+            ]
+
+        for opt in options:
+            if opt not in (request.history or []):
+                return opt
+        return options[0]
+
+    def generate_followup_question(self, request: FollowUpGenerationRequest) -> FollowUpGenerationResponse:
+        """Generates a contextual follow-up question based on the candidate's previous response using Gemini."""
+        if not settings.GEMINI_API_KEY or settings.GEMINI_API_KEY == "YOUR_GEMINI_API_KEY" or not self.is_ready:
+            logger.info("Gemini API not configured. Returning local fallback follow-up question.")
+            fallback_text = self.generate_followup_fallback(request)
+            return FollowUpGenerationResponse(followupQuestion=fallback_text)
+
+        prompt = f"""
+        You are a senior technical or HR interviewer. The candidate has just answered an interview question.
+        Generate exactly one short, contextual follow-up question (maximum 1 or 2 sentences) based on their answer.
+        Probed for details, ask them to clarify an aspect of their answer, or ask about edge cases and tradeoffs.
+        Do NOT repeat or ask questions that are similar to the previously asked follow-ups.
+        
+        Current Question:
+        {request.question_text}
+        
+        Candidate's Answer:
+        {request.answer_text}
+        
+        Previously Asked Follow-ups for this question (DO NOT REPEAT):
+        {", ".join(request.history) if request.history else "None"}
+        
+        Respond with a JSON object matching this schema:
+        {{
+            "followupQuestion": "Your generated follow-up question text here"
+        }}
+        """
+
+        try:
+            generation_config = {
+                "response_mime_type": "application/json",
+                "response_schema": FollowUpGenerationResponse
+            }
+
+            response = resilient_generate_content(
+                prompt,
+                generation_config=generation_config
+            )
+
+            data = json.loads(response.text)
+            return FollowUpGenerationResponse(**data)
+
+        except Exception as e:
+            logger.error("Error during Gemini follow-up question generation: %s. Falling back to local helper.", str(e))
+            fallback_text = self.generate_followup_fallback(request)
+            return FollowUpGenerationResponse(followupQuestion=fallback_text)
  
 # Singleton instance
 question_generator_service = QuestionGeneratorService()

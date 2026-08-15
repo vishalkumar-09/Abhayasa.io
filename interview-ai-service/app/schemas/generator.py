@@ -23,3 +23,12 @@ class QuestionGenerationResponse(BaseModel):
     questions: List[GeneratedQuestionItem] = Field(
         description="List of exactly 45 generated questions (20 RESUME, 20 TECHNICAL, 3 DSA, 2 HR)"
     )
+
+class FollowUpGenerationRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    question_text: str = Field(validation_alias="questionText", description="The current main question or previous follow-up question")
+    answer_text: str = Field(validation_alias="answerText", description="The candidate's spoken or typed answer to the question")
+    history: Optional[List[str]] = Field(default=[], description="List of previous follow-up questions asked for this main question")
+
+class FollowUpGenerationResponse(BaseModel):
+    followupQuestion: str = Field(description="The generated short follow-up question")

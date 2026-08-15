@@ -16,4 +16,8 @@ public class AnswerResponse {
     private String audioPath;
     private Integer evaluationScore;
     private String evaluationFeedback;
+    private Integer technicalScore;
+    private Integer communicationScore;
+    private Integer depthScore;
+    private Integer completenessScore;
 }

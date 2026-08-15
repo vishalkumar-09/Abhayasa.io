@@ -40,7 +40,7 @@ public class Question {
     @Column(name = "category", nullable = true)
     private String category = "TECHNICAL";
 
-    @OneToOne(mappedBy = "question", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @OneToOne(mappedBy = "question", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private Answer answer;
 
     @CreationTimestamp

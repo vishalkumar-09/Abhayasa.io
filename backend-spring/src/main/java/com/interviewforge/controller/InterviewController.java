@@ -64,4 +64,26 @@ public class InterviewController {
         AiServiceClient.HintResponse response = interviewService.getHint(interviewId, questionId, chatHistory);
         return ResponseEntity.ok(response);
     }
+
+    @PostMapping("/{interviewId}/questions/{questionId}/followup")
+    public ResponseEntity<FollowUpResponse> generateFollowUp(
+            @PathVariable Long interviewId,
+            @PathVariable Long questionId,
+            @RequestBody FollowUpRequest request) {
+        FollowUpResponse response = interviewService.generateFollowUp(interviewId, questionId, request);
+        return ResponseEntity.ok(response);
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteInterview(@PathVariable Long id) {
+        interviewService.deleteInterview(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping(value = "/transcribe-audio", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<AiServiceClient.TranscribeResponse> transcribeAudio(
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        AiServiceClient.TranscribeResponse response = interviewService.transcribeAudio(file);
+        return ResponseEntity.ok(response);
+    }
 }

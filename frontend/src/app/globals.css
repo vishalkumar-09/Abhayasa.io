@@ -26,20 +26,20 @@
 }
 
 :root {
-  --background: #09090b; /* Zinc 950 base */
+  --background: #09090b;
   --foreground: #fafafa;
-  --card: #18181b; /* Zinc 900 base for containers */
+  --card: #18181b;
   --card-foreground: #fafafa;
   --popover: #18181b;
   --popover-foreground: #fafafa;
-  --primary: #8b5cf6; /* Modern Violet */
+  --primary: #8b5cf6;
   --primary-foreground: #ffffff;
   --secondary: #27272a;
   --secondary-foreground: #fafafa;
   --muted: #27272a;
   --muted-foreground: #a1a1aa;
   --accent: #7c3aed;
-  --accent-foreground: #fafafa;
+  --accent-foreground: #ffffff;
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
   --border: #27272a;
@@ -47,8 +47,32 @@
   --ring: #c084fc;
 }
 
+/* Linear-inspired Soft Slate Light Theme */
+.light {
+  --background: #f1f5f9;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --primary: #6366f1;
+  --primary-foreground: #ffffff;
+  --secondary: #e2e8f0;
+  --secondary-foreground: #0f172a;
+  --muted: #e2e8f0;
+  --muted-foreground: #334155;
+  --accent: #4f46e5;
+  --accent-foreground: #ffffff;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: #cbd5e1;
+  --input: #cbd5e1;
+  --ring: #6366f1;
+}
+
 * {
   border-color: var(--border);
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
 body {
@@ -56,14 +80,23 @@ body {
   color: var(--foreground);
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 /* Glassmorphism helpers for premium aesthetic */
 .glass {
   background: rgba(24, 24, 27, 0.65);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.light .glass {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(203, 213, 225, 0.8);
+  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05);
 }
 
 .glass-card {
@@ -74,8 +107,25 @@ body {
   box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
 }
 
+.light .glass-card {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.06), 0 8px 10px -6px rgba(15, 23, 42, 0.04);
+}
+
 .neon-glow {
-  text-shadow: 0 0 10px rgba(139, 92, 246, 0.3);
+  text-shadow: 0 0 12px rgba(139, 92, 246, 0.4);
+}
+
+/* Dynamic floating background Orbs */
+.glow-orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(80px);
+  opacity: 0.25;
+  pointer-events: none;
 }
 
 /* Custom linear border animations */
@@ -84,4 +134,78 @@ body {
   background: linear-gradient(var(--card), var(--card)) padding-box,
               linear-gradient(to right, #8b5cf6, #ec4899) border-box;
   border: 1px solid transparent;
+}
+
+/* LIGHT MODE GLOBAL CONTRAST & INPUT OVERRIDES */
+.light input,
+.light select,
+.light textarea {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+.light input::placeholder,
+.light textarea::placeholder {
+  color: #64748b !important;
+}
+
+.light select option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+.light .bg-zinc-950,
+.light .bg-zinc-900,
+.light .bg-zinc-950\/50,
+.light .bg-zinc-950\/40,
+.light .bg-zinc-950\/30,
+.light .bg-black {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+}
+
+.light .bg-zinc-950\/80,
+.light .bg-zinc-950\/60 {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+}
+
+.light .text-white {
+  color: #0f172a !important;
+}
+
+.light .text-zinc-400,
+.light .text-zinc-500,
+.light .text-zinc-300 {
+  color: #334155 !important;
+}
+
+.light .text-zinc-200,
+.light .text-zinc-100 {
+  color: #0f172a !important;
+}
+
+.light .border-zinc-800,
+.light .border-zinc-900,
+.light .border-zinc-800\/80,
+.light .border-zinc-850 {
+  border-color: #cbd5e1 !important;
+}
+
+/* Retain crisp white text on primary action buttons */
+.light .bg-violet-600,
+.light .bg-violet-500,
+.light .bg-purple-600 {
+  background-color: #7c3aed !important;
+  color: #ffffff !important;
+}
+
+.light .bg-violet-600 *,
+.light .bg-violet-500 * {
+  color: #ffffff !important;
+}
+
+.light .bg-violet-600\/10,
+.light .bg-violet-500\/10 {
+  background-color: rgba(124, 58, 237, 0.1) !important;
 }

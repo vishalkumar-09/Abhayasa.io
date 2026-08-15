@@ -49,8 +49,8 @@ function LoginForm() {
   return (
     <div className="flex flex-col gap-6">
       <div className="text-center md:text-left">
-        <h2 className="text-2xl font-semibold tracking-tight text-white">Sign In</h2>
-        <p className="text-sm text-zinc-400 mt-1">Welcome back. Enter your credentials to access your simulator.</p>
+        <h2 className="text-2xl font-semibold tracking-tight text-[var(--foreground)]">Sign In</h2>
+        <p className="text-sm text-[var(--muted-foreground)] mt-1">Welcome back. Enter your credentials to access your simulator.</p>
       </div>
 
       {error && (
@@ -63,11 +63,11 @@ function LoginForm() {
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {/* Email Address */}
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="email" className="text-xs font-medium text-zinc-300">
+          <label htmlFor="email" className="text-xs font-medium text-[var(--foreground)] opacity-90">
             Email Address
           </label>
           <div className="relative">
-            <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 text-zinc-500 pointer-events-none">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 text-zinc-400 pointer-events-none">
               <Mail className="h-4 w-4" />
             </span>
             <input
@@ -78,7 +78,7 @@ function LoginForm() {
               value={formData.email}
               onChange={handleChange}
               placeholder="john@example.com"
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-zinc-950/50 border border-zinc-800 text-white placeholder-zinc-500 text-sm outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-all"
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-zinc-900/60 border border-zinc-800 text-[var(--foreground)] placeholder-zinc-400 text-sm outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-all"
             />
           </div>
         </div>
@@ -86,12 +86,12 @@ function LoginForm() {
         {/* Password */}
         <div className="flex flex-col gap-1.5">
           <div className="flex justify-between items-center">
-            <label htmlFor="password" className="text-xs font-medium text-zinc-300">
+            <label htmlFor="password" className="text-xs font-medium text-[var(--foreground)] opacity-90">
               Password
             </label>
           </div>
           <div className="relative">
-            <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 text-zinc-500 pointer-events-none">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 text-zinc-400 pointer-events-none">
               <Lock className="h-4 w-4" />
             </span>
             <input
@@ -102,7 +102,7 @@ function LoginForm() {
               value={formData.password}
               onChange={handleChange}
               placeholder="••••••••"
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-zinc-950/50 border border-zinc-800 text-white placeholder-zinc-500 text-sm outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-all"
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-zinc-900/60 border border-zinc-800 text-[var(--foreground)] placeholder-zinc-400 text-sm outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-all"
             />
           </div>
         </div>

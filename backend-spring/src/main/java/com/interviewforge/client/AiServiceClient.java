@@ -18,6 +18,8 @@ import java.util.stream.Collectors;
 @Component
 public class AiServiceClient {
 
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(AiServiceClient.class);
+
     private final RestClient restClient;
 
     public AiServiceClient(@Value("${app.ai-service.url}") String aiServiceUrl) {
@@ -78,9 +80,14 @@ public class AiServiceClient {
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
     public static class AnswerEvaluationResponse {
         private Integer score;
         private String feedback;
+        private Integer technicalScore;
+        private Integer communicationScore;
+        private Integer depthScore;
+        private Integer completenessScore;
     }
 
     @Data
@@ -157,6 +164,7 @@ public class AiServiceClient {
                     .body(QuestionGenerationResponse.class);
             return response != null ? response.getQuestions() : List.of();
         } catch (Exception ex) {
+            logger.error("Error generating questions from AI client: {}. Falling back to mock generator.", ex.getMessage());
             // Fallback mock questions in case FastAPI is offline
             return List.of(
                 createMockQuestion("Can you describe a challenging project you worked on and how you resolved technical obstacles?", "MID", List.of("challenge", "problem solving", "resolution")),
@@ -182,7 +190,14 @@ public class AiServiceClient {
                 "Good attempt. You demonstrated knowledge of key concepts. To improve, discuss details around the requested keywords: %s.",
                 String.join(", ", expectedKeywords)
             );
-            return AnswerEvaluationResponse.builder().score(score).feedback(feedback).build();
+            return AnswerEvaluationResponse.builder()
+                    .score(score)
+                    .feedback(feedback)
+                    .technicalScore(score)
+                    .communicationScore(7)
+                    .depthScore(score - 1 > 0 ? score - 1 : 5)
+                    .completenessScore(score)
+                    .build();
         }
     }
 
@@ -224,6 +239,38 @@ public class AiServiceClient {
         }
     }
 
+    public String generateFollowUp(String questionText, String answerText, List<String> history) {
+        FollowUpGenerationRequest requestBody = new FollowUpGenerationRequest(questionText, answerText, history);
+        try {
+            FollowUpGenerationResponse response = restClient.post()
+                    .uri("/api/v1/generate-followup")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(requestBody)
+                    .retrieve()
+                    .body(FollowUpGenerationResponse.class);
+            return response != null ? response.getFollowupQuestion() : "Could you elaborate on that?";
+        } catch (Exception ex) {
+            logger.error("Error generating follow-up question from AI client: {}", ex.getMessage());
+            return "Could you provide more specific details or examples regarding that concept?";
+        }
+    }
+
+    @Data
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class FollowUpGenerationRequest {
+        private String questionText;
+        private String answerText;
+        private List<String> history;
+    }
+
+    @Data
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class FollowUpGenerationResponse {
+        private String followupQuestion;
+    }
+
     @Data
     @AllArgsConstructor
     @NoArgsConstructor
@@ -246,6 +293,31 @@ public class AiServiceClient {
     public static class ChatMessage {
         private String role;
         private String text;
+    }
+
+    @Data
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class TranscribeResponse {
+        private String transcript;
+        private String error;
+    }
+
+    public TranscribeResponse transcribeAudio(org.springframework.web.multipart.MultipartFile file) {
+        try {
+            org.springframework.util.LinkedMultiValueMap<String, Object> body = new org.springframework.util.LinkedMultiValueMap<>();
+            body.add("file", file.getResource());
+
+            return restClient.post()
+                    .uri("/api/v1/transcribe-audio")
+                    .contentType(MediaType.MULTIPART_FORM_DATA)
+                    .body(body)
+                    .retrieve()
+                    .body(TranscribeResponse.class);
+        } catch (Exception ex) {
+            logger.error("Error forwarding audio transcription request: {}", ex.getMessage());
+            return new TranscribeResponse("", ex.getMessage());
+        }
     }
 
     // =========================================================================

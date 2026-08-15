@@ -3,6 +3,7 @@ import json
 import google.generativeai as genai
 from app.core.settings import settings
 from app.schemas.evaluator import AnswerEvaluationRequest, AnswerEvaluationResponse
+from app.llm.gemini_client import resilient_generate_content
 
 logger = logging.getLogger("app")
 
@@ -51,7 +52,7 @@ class AnswerEvaluatorService:
                 "response_schema": AnswerEvaluationResponse
             }
 
-            response = self.model.generate_content(
+            response = resilient_generate_content(
                 prompt,
                 generation_config=generation_config
             )
@@ -74,50 +75,100 @@ class AnswerEvaluatorService:
             return self.get_mock_evaluation(request)
 
     def get_mock_evaluation(self, request: AnswerEvaluationRequest) -> AnswerEvaluationResponse:
-        """Performs simple local keyword matching to simulate dynamic evaluations when offline."""
-        ans_lower = request.answerText.lower()
+        """Performs advanced local heuristic and keyword evaluation when offline/rate-limited."""
+        if not request.answerText or not request.answerText.strip():
+            return AnswerEvaluationResponse(
+                technicalScore=0,
+                communicationScore=0,
+                depthScore=0,
+                completenessScore=0,
+                feedback="No answer was provided. The question was skipped by the candidate.",
+                score=0
+            )
+            
+        ans_clean = request.answerText.strip()
+        ans_lower = ans_clean.lower()
+        
+        # Detect skipped/dunno answers
+        skip_phrases = ["don't know", "dont know", "do not know", "no idea", "skip", "pass", "unsure", "not sure", "forgot", "have no idea"]
+        is_skipped = any(phrase in ans_lower for phrase in skip_phrases) or len(ans_clean) < 8
+        if is_skipped:
+            return AnswerEvaluationResponse(
+                technicalScore=0,
+                communicationScore=2,
+                depthScore=0,
+                completenessScore=0,
+                feedback="The candidate chose to skip this question or stated they did not know the answer.",
+                score=1
+            )
+            
+        # Match keywords
         matched = []
+        unmatched = []
         if request.expectedKeywords:
             for kw in request.expectedKeywords:
-                if kw.lower() in ans_lower:
+                import re
+                pattern = r'\b' + re.escape(kw.lower()) + r'\b'
+                if re.search(pattern, ans_lower) or kw.lower() in ans_lower:
                     matched.append(kw)
-
-        # Base scores
-        match_count = len(matched)
-        if not request.answerText or not request.answerText.strip():
-            tech = 0
-            comm = 0
-            depth = 0
-            comp = 0
-            feedback = "No answer was provided by the candidate."
+                else:
+                    unmatched.append(kw)
+                    
+        # Calculate technical accuracy based on matched keywords ratio
+        total_kws = len(request.expectedKeywords) if request.expectedKeywords else 0
+        if total_kws > 0:
+            kw_ratio = len(matched) / total_kws
+            tech = int(4 + (kw_ratio * 6))
         else:
-            if match_count == 0:
-                tech = 5
-                comm = 7
-                depth = 4
-                comp = 4
-                feedback = "The answer is clear but lacks technical accuracy and fails to reference any expected core keywords."
-            elif match_count == 1:
-                tech = 7
-                comm = 8
-                depth = 6
-                comp = 7
-                feedback = f"Good attempt. You correctly mentioned '{matched[0]}'. To improve, explain the concept with more technical depth."
-            elif match_count == 2:
-                tech = 8
-                comm = 8
-                depth = 8
-                comp = 8
-                feedback = f"Great response! You covered key concepts: {', '.join(matched)}. Your explanation had good technical accuracy and clarity."
+            tech = 7 if len(ans_clean) > 80 else (6 if len(ans_clean) > 40 else 5)
+            
+        # Evaluate depth based on length and explanatory conjunctions
+        conjunctions = ["because", "allows", "which means", "for example", "used to", "creates", "helps to", "stores", "manages", "since", "therefore", "thus"]
+        conjunction_count = sum(1 for word in conjunctions if word in ans_lower)
+        
+        depth = 5
+        if len(ans_clean) > 150:
+            depth += 2
+        elif len(ans_clean) > 80:
+            depth += 1
+            
+        if conjunction_count >= 3:
+            depth += 2
+        elif conjunction_count >= 1:
+            depth += 1
+            
+        depth = min(depth, 10)
+        
+        # Communication score based on length and structure
+        comm = 8 if len(ans_clean) > 60 else (7 if len(ans_clean) > 30 else 6)
+        if ans_clean[0].isupper() and (ans_clean.endswith(".") or ans_clean.endswith("?") or ans_clean.endswith("!")):
+            comm = min(comm + 1, 10)
+            
+        # Completeness based on covered keywords and answer depth
+        if total_kws > 0:
+            comp = int(3 + (len(matched) / total_kws * 6))
+            if depth >= 7:
+                comp = min(comp + 1, 10)
+        else:
+            comp = 7 if len(ans_clean) > 80 else 6
+            
+        # Compile natural, high-quality customized feedback
+        if total_kws > 0:
+            if len(matched) == total_kws:
+                feedback = f"Excellent! Your answer is highly complete and accurately covers all key concepts: {', '.join(matched)}. You demonstrated a strong understanding and solid depth of explanation."
+            elif len(matched) > 0:
+                missing_str = f" To improve, make sure to also explain how it relates to: {', '.join(unmatched)}." if unmatched else ""
+                feedback = f"Good attempt! You correctly mentioned key terms: {', '.join(matched)}.{missing_str} Your response shows a good foundation but could benefit from a bit more technical details."
             else:
-                tech = 9
-                comm = 9
-                depth = 9
-                comp = 9
-                feedback = f"Excellent! Comprehensive answer covering: {', '.join(matched)}. Demonstrated outstanding communication and depth."
-
+                feedback = f"Your answer is structured but misses the core concepts of the question. You should research the following keywords: {', '.join(unmatched)} to align with the expected explanation."
+        else:
+            if len(ans_clean) > 100:
+                feedback = "Great response! You provided a detailed answer with good structure. The explanation shows clear conceptual understanding."
+            else:
+                feedback = "Your answer is correct but quite brief. Try to elaborate on how the concept works and provide examples to show greater depth."
+                
         average_score = int(round((tech + comm + depth + comp) / 4))
-
+        
         return AnswerEvaluationResponse(
             technicalScore=tech,
             communicationScore=comm,
