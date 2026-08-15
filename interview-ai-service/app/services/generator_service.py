@@ -119,16 +119,17 @@ class QuestionGeneratorService:
             "MongoDB", "Redis", "Docker", "Kubernetes", "AWS", "GCP", "Git", "REST APIs", "GraphQL"
         ]
         
-        # 1. Simple skills extraction
-        resume_lower = resume_text.lower()
-        candidate_skills = [t for t in known_techs if t.lower() in resume_lower]
+        # 1. Dynamic skills extraction
+        from app.services.parser_service import extract_heuristic_skills
+        candidate_skills = extract_heuristic_skills(resume_text)
         if not candidate_skills:
-            candidate_skills = ["Java", "Spring Boot", "REST APIs", "SQL"]
+            candidate_skills = extract_heuristic_skills(jd_text)
+        if not candidate_skills:
+            candidate_skills = ["Software Architecture", "Problem Solving", "System Design", "Database Management"]
             
-        jd_lower = jd_text.lower()
-        job_skills = [t for t in known_techs if t.lower() in jd_lower]
+        job_skills = extract_heuristic_skills(jd_text)
         if not job_skills:
-            job_skills = ["Software Engineering", "System Design", "Databases"]
+            job_skills = candidate_skills
 
         target_title = job_title if job_title else "Software Engineer"
         target_company = company_name if company_name else "the company"

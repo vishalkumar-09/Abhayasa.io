@@ -199,8 +199,12 @@ class LangChainClient:
     def parse_resume(self, resume_text: str) -> StructuredResumeData:
         """Parses raw resume text into structured JSON using LangChain."""
         if not self.is_ready:
+            from app.services.parser_service import extract_heuristic_skills
+            extracted = extract_heuristic_skills(resume_text)
+            if not extracted:
+                extracted = ["Software Engineering", "Problem Solving", "System Architecture"]
             return StructuredResumeData(
-                skills=["Java", "Spring Boot", "React", "SQL", "Docker"],
+                skills=extracted,
                 projects=[],
                 education=[],
                 experience=[]
@@ -231,8 +235,12 @@ Resume Text:
             return StructuredResumeData(**data)
         except Exception as e:
             logger.error("LangChain parse_resume error: %s", str(e))
+            from app.services.parser_service import extract_heuristic_skills
+            extracted = extract_heuristic_skills(resume_text)
+            if not extracted:
+                extracted = ["Software Engineering", "Problem Solving", "System Architecture"]
             return StructuredResumeData(
-                skills=["Java", "Spring Boot", "React", "PostgreSQL"],
+                skills=extracted,
                 projects=[],
                 education=[],
                 experience=[]
@@ -251,11 +259,14 @@ Resume Text:
         Generates short follow-up questions using Multi-Provider Rolling Technique.
         Token-optimized to prevent context window overflow.
         """
-        if not self.is_ready:
-            return "Can you elaborate on how you handled error recovery and state management in that scenario?"
-
         safe_question = (question_text or "")[:300]
         safe_answer = (answer_text or "")[:400]
+
+        if not self.is_ready:
+            from app.services.parser_service import extract_heuristic_skills
+            found = extract_heuristic_skills(safe_answer + " " + safe_question)
+            tech = found[0] if found else "that implementation"
+            return f"What trade-offs or performance considerations did you evaluate when using {tech}?"
 
         prompt_template = PromptTemplate.from_template(
             """You are an elite technical interviewer.
@@ -276,7 +287,10 @@ Output ONLY the follow-up question text.
             return res.strip().replace('"', '')
         except Exception as e:
             logger.error("LangChain follow-up error: %s. Returning fallback follow-up.", str(e))
-            return "What trade-offs or performance considerations did you evaluate when choosing that solution?"
+            from app.services.parser_service import extract_heuristic_skills
+            found = extract_heuristic_skills(safe_answer + " " + safe_question)
+            tech = found[0] if found else "that implementation"
+            return f"What trade-offs or performance considerations did you evaluate when using {tech}?"
 
     def evaluate_answer(self, question_text: str, answer_text: str, difficulty: str = "MEDIUM") -> AnswerEvaluationResponse:
         """Evaluates candidate answer using LangChain ChatPromptTemplate with rolling multi-provider models."""
