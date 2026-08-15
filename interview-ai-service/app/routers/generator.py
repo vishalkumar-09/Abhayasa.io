@@ -22,19 +22,27 @@ def generate_followup(request: FollowUpGenerationRequest):
 
 @router.post("/transcribe-audio")
 async def transcribe_audio(file: UploadFile = File(...)):
-    """Transcribes raw recorded audio (WebM, WAV, MP4) verbatim using Gemini Multimodal Audio AI."""
+    """Transcribes raw recorded audio (WebM, WAV, MP4) verbatim using Gemini Multimodal Audio AI or Groq Whisper."""
     try:
         contents = await file.read()
+        if not contents or len(contents) < 50:
+            return {"transcript": "", "error": "No audio file detected or payload empty."}
+
         mime_type = file.content_type or "audio/webm"
-        
-        audio_part = {
-            "mime_type": mime_type,
-            "data": contents
-        }
-        prompt = "Transcribe the spoken speech in this audio file verbatim into clean English text. Output ONLY the transcribed spoken text without any extra notes, commentary, or markdown formatting."
+        filename = file.filename or "speech.webm"
+        if not mime_type or mime_type == "application/octet-stream":
+            if filename.endswith(".mp4"):
+                mime_type = "audio/mp4"
+            elif filename.endswith(".aac"):
+                mime_type = "audio/aac"
+            elif filename.endswith(".wav"):
+                mime_type = "audio/wav"
+            else:
+                mime_type = "audio/webm"
         
         from app.llm.langchain_client import langchain_client
-        res_text = langchain_client.execute_prompt(prompt)
+        res_text = langchain_client.transcribe_audio_bytes(contents, mime_type)
         return {"transcript": res_text.strip()}
     except Exception as e:
+        logger.error("Audio transcription error: %s", str(e))
         return {"transcript": "", "error": str(e)}

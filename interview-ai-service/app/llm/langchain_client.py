@@ -382,5 +382,61 @@ Return ONLY a JSON object with:
         data = extract_json_payload(raw_output)
         return ReportGenerationResponse(**data)
 
+    def transcribe_audio_bytes(self, audio_bytes: bytes, mime_type: str = "audio/webm") -> str:
+        """Transcribes raw recorded audio bytes using Gemini Multimodal Audio or Groq Whisper API."""
+        if not audio_bytes or len(audio_bytes) < 50:
+            return ""
+
+        # 1. Try Gemini Multimodal Audio API
+        for key in self.gemini_keys:
+            try:
+                from google import genai
+                from google.genai import types
+                client = genai.Client(api_key=key)
+                
+                audio_part = types.Part.from_bytes(
+                    data=audio_bytes,
+                    mime_type=mime_type or "audio/webm"
+                )
+                prompt = "Transcribe the spoken speech in this audio file verbatim into clean English text. Output ONLY the transcribed spoken text without any extra notes, commentary, or markdown formatting."
+                
+                try:
+                    response = client.models.generate_content(
+                        model="gemini-2.5-flash",
+                        contents=[audio_part, prompt]
+                    )
+                    if response.text and response.text.strip():
+                        logger.info("Successfully transcribed audio via Gemini 2.5 Flash (%d bytes)", len(audio_bytes))
+                        return response.text.strip()
+                except Exception as model_err:
+                    logger.warning("Gemini 2.5 Flash audio transcription failed: %s", str(model_err))
+            except Exception as key_err:
+                logger.warning("Gemini key transcription failed: %s. Trying Groq Whisper...", str(key_err))
+
+        # 2. Try Groq Whisper API (whisper-large-v3-turbo / whisper-large-v3)
+        groq_whisper_models = ["whisper-large-v3-turbo", "whisper-large-v3"]
+        for key in self.groq_keys:
+            for w_model in groq_whisper_models:
+                try:
+                    import httpx
+                    headers = {"Authorization": f"Bearer {key}"}
+                    files = {"file": ("speech.webm", audio_bytes, mime_type or "audio/webm")}
+                    data = {"model": w_model, "language": "en"}
+                    
+                    with httpx.Client(timeout=15.0) as client:
+                        resp = client.post("https://api.groq.com/openai/v1/audio/transcriptions", headers=headers, files=files, data=data)
+                        if resp.status_code == 200:
+                            result = resp.json()
+                            text = result.get("text", "").strip()
+                            if text:
+                                logger.info("Successfully transcribed audio via Groq Whisper %s (%d bytes)", w_model, len(audio_bytes))
+                                return text
+                        else:
+                            logger.warning("Groq Whisper %s returned HTTP %d: %s", w_model, resp.status_code, resp.text)
+                except Exception as e:
+                    logger.warning("Groq Whisper %s failed: %s", w_model, str(e))
+
+        return ""
+
 # Global singleton instance
 langchain_client = LangChainClient()
