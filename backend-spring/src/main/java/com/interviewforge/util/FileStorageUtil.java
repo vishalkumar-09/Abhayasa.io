@@ -33,10 +33,11 @@ public class FileStorageUtil {
         String contentType = file.getContentType();
         String originalFileName = StringUtils.cleanPath(Objects.requireNonNull(file.getOriginalFilename()));
         
-        // Enforce PDF validation
-        if (!originalFileName.toLowerCase().endsWith(".pdf") && 
-            (contentType == null || !contentType.equals("application/pdf"))) {
-            throw new StorageException("Only PDF resumes are supported.");
+        String lowerName = originalFileName.toLowerCase();
+        boolean isValidExtension = lowerName.endsWith(".pdf") || lowerName.endsWith(".docx") || lowerName.endsWith(".doc") || lowerName.endsWith(".txt");
+        
+        if (!isValidExtension) {
+            throw new StorageException("Only PDF, DOCX, DOC, and TXT resumes are supported.");
         }
 
         try {
