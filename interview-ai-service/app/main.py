@@ -67,7 +67,7 @@ app.add_middleware(
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
 # 6. Global Root Endpoints
-@app.get("/", tags=["Root"])
+@app.api_route("/", methods=["GET", "HEAD"], tags=["Root"])
 def read_root():
     """Service landing page showing basic metadata."""
     return {
@@ -76,7 +76,7 @@ def read_root():
         "version": "1.0.0"
     }
 
-@app.get("/health", tags=["Health"])
+@app.api_route("/health", methods=["GET", "HEAD"], tags=["Health"])
 def health_check():
-    """Simple ping health endpoint."""
+    """Simple ping health endpoint supporting both GET and HEAD requests for monitoring tools."""
     return {"status": "healthy"}
