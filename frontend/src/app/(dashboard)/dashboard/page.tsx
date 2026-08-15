@@ -63,7 +63,13 @@ export default function DashboardPage() {
     queryKey: ["interviews"],
     queryFn: async () => {
       const res = await apiClient.get("/api/v1/interviews");
-      return res.data;
+      const list = res.data || [];
+      return [...list].sort((a: any, b: any) => {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        if (timeB !== timeA) return timeB - timeA;
+        return (b.id || 0) - (a.id || 0);
+      });
     },
   });
 

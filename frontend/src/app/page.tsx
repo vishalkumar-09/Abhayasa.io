@@ -123,15 +123,6 @@ export default function LandingPage() {
           animate="visible"
           className="text-center flex flex-col items-center gap-6 max-w-3xl"
         >
-          {/* AI pill badge */}
-          <motion.div
-            variants={itemVariants}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-semibold bg-violet-500/10 border border-violet-500/20 text-violet-500 shadow-sm"
-          >
-            <Sparkles className="h-3.5 w-3.5 animate-pulse" />
-            AI-Powered Mock Simulation Platform
-          </motion.div>
-
           <motion.h1
             variants={itemVariants}
             className="text-4xl md:text-6xl font-extrabold tracking-tight text-[var(--foreground)] leading-[1.15]"
@@ -146,7 +137,7 @@ export default function LandingPage() {
             variants={itemVariants}
             className="text-[var(--muted-foreground)] font-medium text-base md:text-lg max-w-2xl leading-relaxed"
           >
-            Upload your resume, configure your target job, and let our Gemini-powered simulator build personalized interview tracks. Get rated on technical accuracy, communication depth, and conceptual gaps.
+            Upload your resume, configure your target job, and let our simulator build personalized interview tracks. Get rated on technical accuracy, communication depth, and conceptual gaps.
           </motion.p>
 
           <motion.div

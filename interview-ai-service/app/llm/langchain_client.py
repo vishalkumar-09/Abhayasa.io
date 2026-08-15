@@ -13,28 +13,22 @@ from app.schemas.report import ReportGenerationResponse
 
 logger = logging.getLogger("app")
 
-# Provider model definitions
+# Provider model definitions prioritized by speed and active API support
 PROVIDER_MODELS = {
-    "gemini": [
-        "gemini-3.6-flash",
-        "gemini-3.7-flash",
-        "gemini-2.5-flash-lite",
-        "gemini-2.5-flash"
-    ],
     "groq": [
         "llama-3.3-70b-versatile",
-        "llama3-8b-8192",
-        "mixtral-8x7b-32768",
-        "deepseek-r1-distill-llama-70b"
+        "llama-3.1-8b-instant"
+    ],
+    "gemini": [
+        "gemini-2.5-flash",
+        "gemini-1.5-flash"
     ],
     "openai": [
         "gpt-4o-mini",
-        "gpt-4o",
-        "gpt-3.5-turbo"
+        "gpt-4o"
     ],
     "anthropic": [
-        "claude-3-5-haiku-20241022",
-        "claude-3-haiku-20240307"
+        "claude-3-5-haiku-20241022"
     ]
 }
 
@@ -45,11 +39,8 @@ def parse_keys_list(raw_keys: str) -> List[str]:
 
 class LangChainClient:
     """
-    Multi-Provider LangChain Client with Rolling Technique across 4 LLM Ecosystems:
-    - Google Gemini
-    - OpenAI ChatGPT
-    - Groq (Llama 3.3, Mixtral, DeepSeek)
-    - Anthropic Claude
+    Ultra-Fast Multi-Provider LangChain Client with Instant Rolling Technique.
+    Configured with max_retries=0 to eliminate blocking backoff delays when models hit 429 quota.
     """
 
     def __init__(self):
@@ -61,54 +52,66 @@ class LangChainClient:
         self._rolling_counter = 0
         self._lock = threading.Lock()
         
-        # Build active provider-model-key tuples
+        # Build active provider-model-key tuples prioritizing ultra-fast Groq and OpenAI
         self.active_pool: List[Tuple[str, str, str]] = []
-        
-        # Register Gemini instances
-        for k in self.gemini_keys:
-            for m in PROVIDER_MODELS["gemini"]:
-                self.active_pool.append(("gemini", m, k))
 
-        # Register Groq instances
+        # 1. Register Groq (Inference speed ~200ms)
         for k in self.groq_keys:
             for m in PROVIDER_MODELS["groq"]:
                 self.active_pool.append(("groq", m, k))
 
-        # Register OpenAI instances
+        # 2. Register OpenAI (Latency ~500ms)
         for k in self.openai_keys:
             for m in PROVIDER_MODELS["openai"]:
                 self.active_pool.append(("openai", m, k))
 
-        # Register Anthropic instances
+        # 3. Register Gemini
+        for k in self.gemini_keys:
+            for m in PROVIDER_MODELS["gemini"]:
+                self.active_pool.append(("gemini", m, k))
+
+        # 4. Register Anthropic
         for k in self.anthropic_keys:
             for m in PROVIDER_MODELS["anthropic"]:
                 self.active_pool.append(("anthropic", m, k))
 
         self.is_ready = len(self.active_pool) > 0
         if self.is_ready:
-            logger.info("LangChain Multi-LLM Client initialized with %d active model/key configurations across providers.", len(self.active_pool))
+            logger.info("LangChain Multi-LLM Client initialized with %d active model configurations.", len(self.active_pool))
         else:
-            logger.warning("LangChain Client initialized with 0 API keys (running mock mode). Add GEMINI_API_KEY, GROQ_API_KEY, or OPENAI_API_KEY to .env.")
+            logger.warning("LangChain Client initialized with 0 API keys.")
 
-    def _build_llm(self, provider: str, model_name: str, api_key: str, temperature: float = 0.7):
-        """Dynamically instantiates LangChain LLM classes based on provider."""
-        if provider == "gemini":
-            from langchain_google_genai import ChatGoogleGenerativeAI
-            return ChatGoogleGenerativeAI(model=model_name, google_api_key=api_key, temperature=temperature)
-        elif provider == "groq":
+    def _build_llm(self, provider: str, model_name: str, api_key: str, temperature: float = 0.7, max_tokens: Optional[int] = None):
+        """Dynamically instantiates LangChain LLM with token length tightening for ultra-low latency."""
+        if provider == "groq":
             from langchain_groq import ChatGroq
-            return ChatGroq(model_name=model_name, groq_api_key=api_key, temperature=temperature)
+            kw = {"model_name": model_name, "groq_api_key": api_key, "temperature": temperature, "max_retries": 1}
+            if max_tokens:
+                kw["max_tokens"] = max_tokens
+            return ChatGroq(**kw)
         elif provider == "openai":
             from langchain_openai import ChatOpenAI
-            return ChatOpenAI(model=model_name, api_key=api_key, temperature=temperature)
+            kw = {"model_name": model_name, "api_key": api_key, "temperature": temperature, "max_retries": 1}
+            if max_tokens:
+                kw["max_tokens"] = max_tokens
+            return ChatOpenAI(**kw)
+        elif provider == "gemini":
+            from langchain_google_genai import ChatGoogleGenerativeAI
+            kw = {"model": model_name, "google_api_key": api_key, "temperature": temperature, "max_retries": 0}
+            if max_tokens:
+                kw["max_output_tokens"] = max_tokens
+            return ChatGoogleGenerativeAI(**kw)
         elif provider == "anthropic":
             from langchain_anthropic import ChatAnthropic
-            return ChatAnthropic(model=model_name, api_key=api_key, temperature=temperature)
+            kw = {"model_name": model_name, "api_key": api_key, "temperature": temperature, "max_retries": 1}
+            if max_tokens:
+                kw["max_tokens"] = max_tokens
+            return ChatAnthropic(**kw)
         else:
             raise ValueError(f"Unknown LLM provider: {provider}")
 
-    def execute_prompt(self, prompt_text: str, temperature: float = 0.7) -> str:
-        """Executes LLM request via LangChain using the Multi-Provider Rolling Technique."""
+    def execute_prompt(self, prompt_text: str, temperature: float = 0.7, max_tokens: Optional[int] = None) -> str:
+        """Executes LLM request via LangChain with instant failover and token tightening."""
         if not self.is_ready:
             raise ValueError("No LLM API keys configured. Set GEMINI_API_KEY, GROQ_API_KEY, or OPENAI_API_KEY in .env.")
 
@@ -123,7 +126,7 @@ class LangChainClient:
         for idx in candidate_indices:
             provider, model_name, api_key = self.active_pool[idx]
             try:
-                llm = self._build_llm(provider, model_name, api_key, temperature=temperature)
+                llm = self._build_llm(provider, model_name, api_key, temperature=temperature, max_tokens=max_tokens)
                 prompt = PromptTemplate.from_template("{input}")
                 chain = prompt | llm
                 response = chain.invoke({"input": prompt_text})
@@ -135,18 +138,13 @@ class LangChainClient:
                 else:
                     raw_text = str(content)
 
-                logger.info("LangChain Multi-LLM success via provider '%s' model '%s'", provider.upper(), model_name)
+                logger.info("LangChain success via provider '%s' model '%s'", provider.upper(), model_name)
                 return raw_text
             except Exception as e:
                 err_msg = str(e)
-                if "429" in err_msg or "Quota" in err_msg or "404" in err_msg or "ResourceExhausted" in err_msg or "rate_limit" in err_msg.lower():
-                    logger.warning("LangChain provider '%s' model '%s' rate/token limited. Rolling to next provider...", provider.upper(), model_name)
-                    last_err = e
-                    continue
-                else:
-                    logger.error("LangChain error on provider '%s' model '%s': %s. Trying fallback...", provider.upper(), model_name, err_msg[:100])
-                    last_err = e
-                    continue
+                logger.warning("LangChain provider '%s' model '%s' returned error: %s. Instantly rolling to next model...", provider.upper(), model_name, err_msg[:120])
+                last_err = e
+                continue
 
         if last_err:
             raise last_err
@@ -214,22 +212,20 @@ Resume Text:
 
         prompt_template = PromptTemplate.from_template(
             """You are an elite technical interviewer.
-Current Question: {question_text}
+Question Asked: {question_text}
 Candidate Spoken Answer: {answer_text}
-Recent Follow-ups: {history}
 
-Ask ONE sharp, technical follow-up question under 20 words asking about technical implementation details, trade-offs, or edge cases.
-Output ONLY the question text.
+Ask ONE sharp follow-up question under 20 words probing directly into the specific technical tools, implementation choices, or concepts the candidate mentioned in their answer.
+Output ONLY the follow-up question text.
 """
         )
         formatted_prompt = prompt_template.format(
             question_text=safe_question,
-            answer_text=safe_answer,
-            history=", ".join(safe_history) if safe_history else "None"
+            answer_text=safe_answer
         )
 
         try:
-            res = self.execute_prompt(formatted_prompt, temperature=0.6)
+            res = self.execute_prompt(formatted_prompt, temperature=0.6, max_tokens=40)
             return res.strip().replace('"', '')
         except Exception as e:
             logger.error("LangChain follow-up error: %s. Returning fallback follow-up.", str(e))
@@ -273,7 +269,7 @@ Return ONLY a JSON object with:
         ).to_string()
 
         try:
-            raw_output = self.execute_prompt(formatted_prompt, temperature=0.3)
+            raw_output = self.execute_prompt(formatted_prompt, temperature=0.3, max_tokens=220)
             cleaned = raw_output.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
             data = json.loads(cleaned)
             return AnswerEvaluationResponse(**data)
@@ -315,7 +311,7 @@ Return ONLY a JSON object with:
         ).to_string()
 
         try:
-            return self.execute_prompt(formatted_prompt, temperature=0.5)
+            return self.execute_prompt(formatted_prompt, temperature=0.5, max_tokens=60)
         except Exception as e:
             logger.error("LangChain generate_hint error: %s", str(e))
             return "Think about the data structures and algorithmic complexity needed for this question."

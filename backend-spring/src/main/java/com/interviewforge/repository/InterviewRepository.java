@@ -12,7 +12,7 @@ import java.util.List;
 
 @Repository
 public interface InterviewRepository extends JpaRepository<Interview, Long> {
-    List<Interview> findByUserId(Long userId);
+    List<Interview> findByUserIdOrderByIdDesc(Long userId);
     List<Interview> findByUserIdAndStatus(Long userId, InterviewStatus status);
 
     @Modifying

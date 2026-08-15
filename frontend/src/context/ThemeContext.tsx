@@ -10,21 +10,18 @@ interface ThemeContextType {
 }
 
 const ThemeContext = createContext<ThemeContextType>({
-  theme: "dark",
+  theme: "light",
   toggleTheme: () => {},
 });
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [theme, setTheme] = useState<Theme>("dark");
+  const [theme, setTheme] = useState<Theme>("light");
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("interviewforge_theme") as Theme | null;
-    if (savedTheme) {
-      setTheme(savedTheme);
-      document.documentElement.classList.toggle("light", savedTheme === "light");
-    } else {
-      document.documentElement.classList.remove("light");
-    }
+    const initialTheme = savedTheme || "light";
+    setTheme(initialTheme);
+    document.documentElement.classList.toggle("light", initialTheme === "light");
   }, []);
 
   const toggleTheme = () => {

@@ -104,7 +104,7 @@ public class InterviewService {
     @Transactional(readOnly = true)
     public List<InterviewResponse> getUserInterviews() {
         User user = getAuthenticatedUser();
-        List<Interview> interviews = interviewRepository.findByUserId(user.getId());
+        List<Interview> interviews = interviewRepository.findByUserIdOrderByIdDesc(user.getId());
         return interviews.stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
@@ -335,8 +335,12 @@ public class InterviewService {
         Question question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Question not found with id: " + questionId));
         
+        String currentQuestionContext = (request.getHistory() != null && !request.getHistory().isEmpty())
+                ? request.getHistory().get(request.getHistory().size() - 1)
+                : question.getQuestionText();
+
         String followupText = aiServiceClient.generateFollowUp(
-                question.getQuestionText(),
+                currentQuestionContext,
                 request.getAnswerText(),
                 request.getHistory()
         );
