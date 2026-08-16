@@ -57,15 +57,37 @@ export const QuestionReviewCard: React.FC<QuestionReviewCardProps> = React.memo(
         )}
       </div>
 
-      {/* Candidate Answer */}
-      <div className="flex flex-col gap-2 p-4 rounded-xl bg-zinc-950/60 border border-zinc-900">
+      {/* Candidate Main Answer & Follow-up Responses */}
+      <div className="flex flex-col gap-3 p-4 rounded-xl bg-zinc-950/60 border border-zinc-900">
         <span className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider flex items-center gap-1">
           <MessageSquare className="h-3 w-3 text-zinc-400" />
-          Your Submitted Explanation:
+          Candidate Response & Follow-Up Log:
         </span>
-        <p className="text-xs text-zinc-300 leading-relaxed font-mono whitespace-pre-wrap">
-          {answer?.answerText || "No response submitted."}
-        </p>
+        
+        <div className="text-xs text-zinc-300 leading-relaxed font-mono whitespace-pre-wrap">
+          {(() => {
+            const rawText = answer?.answerText || "No response submitted.";
+            if (!rawText.includes("[Follow-Up")) {
+              return <p>{rawText}</p>;
+            }
+
+            const parts = rawText.split(/(\[Follow-Up\s*#?\d*.*?\]:?)/gi);
+            return (
+              <div className="flex flex-col gap-2">
+                {parts.map((part, pIdx) => {
+                  if (part.match(/\[Follow-Up/i)) {
+                    return (
+                      <span key={pIdx} className="text-amber-400 font-bold font-sans text-[11px] block mt-2">
+                        {part.trim()}
+                      </span>
+                    );
+                  }
+                  return part.trim() ? <span key={pIdx}>{part}</span> : null;
+                })}
+              </div>
+            );
+          })()}
+        </div>
       </div>
 
       {/* Evaluation Feedback */}

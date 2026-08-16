@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import { ReportHeader } from "@/components/report/ReportHeader";
 import { ReportSummaryCard } from "@/components/report/ReportSummaryCard";
+import { PerformanceMetricsCard } from "@/components/report/PerformanceMetricsCard";
 import { StrengthsWeaknessesGrid } from "@/components/report/StrengthsWeaknessesGrid";
 import { PrepStepsChecklist } from "@/components/report/PrepStepsChecklist";
 import { QuestionReviewCard } from "@/components/report/QuestionReviewCard";
@@ -74,6 +75,9 @@ export default function ReportPage() {
 
         {/* Summary Card */}
         <ReportSummaryCard summary={report.summary} />
+
+        {/* Performance Metrics Bar Graphs */}
+        <PerformanceMetricsCard overallScore={overallScore} />
 
         {/* Strengths & Weaknesses Grid */}
         <StrengthsWeaknessesGrid
