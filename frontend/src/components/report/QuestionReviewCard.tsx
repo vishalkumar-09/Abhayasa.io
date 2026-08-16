@@ -7,6 +7,7 @@ interface AnswerItem {
   id: number;
   answerText: string;
   score?: number;
+  evaluationScore?: number;
   evaluationFeedback?: string;
   idealAnswer?: string;
 }
@@ -15,6 +16,7 @@ interface QuestionItem {
   id: number;
   questionText: string;
   expectedConcepts?: string[];
+  answer?: AnswerItem;
   answers?: AnswerItem[];
 }
 
@@ -25,8 +27,9 @@ interface QuestionReviewCardProps {
 
 export const QuestionReviewCard: React.FC<QuestionReviewCardProps> = React.memo(({ question, index }) => {
   const [showIdeal, setShowIdeal] = useState(false);
-  const answer = question.answers?.[0];
-  const score = answer?.score !== undefined ? Number(answer.score) : 0;
+  const answer = question.answer || (question.answers && question.answers[0]);
+  const rawScore = answer?.evaluationScore !== undefined ? answer.evaluationScore : answer?.score;
+  const score = rawScore !== undefined ? Number(rawScore) : 0;
 
   const getScoreColor = (s: number) => {
     if (s >= 80) return "bg-emerald-500/10 border-emerald-500/30 text-emerald-400";

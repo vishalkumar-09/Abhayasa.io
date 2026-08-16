@@ -16,10 +16,13 @@ import java.util.List;
 public class ReportResponse {
     private Long id;
     private Long interviewId;
+    private String roleTitle;
+    private String categoryName;
     private BigDecimal overallScore;
     private String summary;
     private List<String> strengths;
     private List<String> weaknesses;
     private String recommendations;
+    private List<QuestionResponse> questions;
     private LocalDateTime createdAt;
 }

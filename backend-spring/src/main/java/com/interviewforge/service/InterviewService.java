@@ -300,14 +300,32 @@ public class InterviewService {
     }
 
     private ReportResponse mapToReportResponse(Report report) {
+        Interview interview = report.getInterview();
+        List<QuestionResponse> questionDtos = List.of();
+        if (interview != null && interview.getQuestions() != null) {
+            questionDtos = interview.getQuestions().stream()
+                    .map(q -> QuestionResponse.builder()
+                            .id(q.getId())
+                            .questionText(q.getQuestionText())
+                            .difficulty(q.getDifficulty().name())
+                            .answered(q.getAnswer() != null)
+                            .category(q.getCategory() != null ? q.getCategory() : "TECHNICAL")
+                            .answer(q.getAnswer() != null ? mapToAnswerResponse(q.getAnswer()) : null)
+                            .build())
+                    .collect(Collectors.toList());
+        }
+
         return ReportResponse.builder()
                 .id(report.getId())
-                .interviewId(report.getInterview().getId())
+                .interviewId(interview != null ? interview.getId() : null)
+                .roleTitle(interview != null && interview.getInterviewType() != null ? interview.getInterviewType() + " Interview" : "Technical Mock Interview")
+                .categoryName(interview != null ? interview.getInterviewType() : "TECHNICAL")
                 .overallScore(report.getOverallScore())
                 .summary(report.getSummary())
                 .strengths(report.getStrengths())
                 .weaknesses(report.getWeaknesses())
                 .recommendations(report.getRecommendations())
+                .questions(questionDtos)
                 .createdAt(report.getCreatedAt())
                 .build();
     }
