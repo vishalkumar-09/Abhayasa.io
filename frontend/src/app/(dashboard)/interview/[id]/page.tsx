@@ -60,6 +60,7 @@ export default function LiveInterviewPage() {
   // Follow-up States
   const [followUpCount, setFollowUpCount] = useState(0);
   const [followUpQuestionText, setFollowUpQuestionText] = useState("");
+  const [followUpQuestionsHistory, setFollowUpQuestionsHistory] = useState<string[]>([]);
   const lastSpokenQuestionIdRef = useRef<number | null>(null);
   const activeSpokenTextRef = useRef<string>("");
 
@@ -237,30 +238,33 @@ export default function LiveInterviewPage() {
     }
   }, [currentQuestion, isMuted]);
 
-  // Submit Answer Mutation
-  const submitAnswerMutation = useMutation({
-    mutationFn: async (req: { questionId: number; answerText: string }) => {
+  // Generate AI Follow-Up Question Mutation
+  const generateFollowUpMutation = useMutation({
+    mutationFn: async (req: { questionId: number; answerText: string; history: string[] }) => {
       const res = await apiClient.post(
-        `/api/v1/interviews/${interviewId}/questions/${req.questionId}/answers`,
-        { answerText: req.answerText }
+        `/api/v1/interviews/${interviewId}/questions/${req.questionId}/followup`,
+        req
       );
       return res.data;
     },
-    onSuccess: () => {
-      setAnswerText("");
-      setCodeContent("");
-      setErrorMsg(null);
-      queryClient.invalidateQueries({ queryKey: ["interview", interviewId] });
-
-      if (currentIdx < totalQuestions - 1) {
-        updateIndex(currentIdx + 1);
+    onSuccess: (data) => {
+      if (data?.followupQuestion) {
+        const text = data.followupQuestion;
+        setFollowUpCount((prev) => prev + 1);
+        setFollowUpQuestionText(text);
+        setFollowUpQuestionsHistory((prev) => [...prev, text]);
+        setAnswerText("");
+        setCodeContent("");
+        setTimeout(() => {
+          speakQuestion(text);
+        }, 100);
       } else {
-        completeInterviewMutation.mutate();
+        updateIndex(currentIdx + 1);
       }
     },
     onError: (err: any) => {
-      console.error(err);
-      setErrorMsg(err.response?.data?.message || "Failed to submit evaluation for this answer.");
+      console.warn("Follow-up generation error, moving to next main question:", err);
+      updateIndex(currentIdx + 1);
     },
   });
 
@@ -388,6 +392,34 @@ export default function LiveInterviewPage() {
     setAudioStream(null);
   };
 
+  // Submit Final Answer Mutation
+  const submitAnswerMutation = useMutation({
+    mutationFn: async (req: { questionId: number; answerText: string }) => {
+      const res = await apiClient.post(
+        `/api/v1/interviews/${interviewId}/questions/${req.questionId}/answers`,
+        { answerText: req.answerText }
+      );
+      return res.data;
+    },
+    onSuccess: () => {
+      setAnswerText("");
+      setCodeContent("");
+      setErrorMsg(null);
+      queryClient.invalidateQueries({ queryKey: ["interview", interviewId] });
+
+      if (currentIdx < totalQuestions - 1) {
+        updateIndex(currentIdx + 1);
+      } else {
+        completeInterviewMutation.mutate();
+      }
+    },
+    onError: (err: any) => {
+      console.error(err);
+      setErrorMsg(err.response?.data?.message || "Failed to submit evaluation for this answer.");
+    },
+  });
+
+  // Handle Answer Submission (Triggers adaptive AI follow-up for initial responses)
   const handleSubmitAnswer = () => {
     if (!currentQuestion) return;
     const finalAnswerText = isCodingMode
@@ -396,10 +428,20 @@ export default function LiveInterviewPage() {
 
     if (!finalAnswerText.trim()) return;
 
-    submitAnswerMutation.mutate({
-      questionId: currentQuestion.id,
-      answerText: finalAnswerText.trim(),
-    });
+    if (followUpCount < 2) {
+      // Formulate adaptive AI follow-up question
+      generateFollowUpMutation.mutate({
+        questionId: currentQuestion.id,
+        answerText: finalAnswerText.trim(),
+        history: followUpQuestionsHistory,
+      });
+    } else {
+      // Complete question block evaluation and advance to next question
+      submitAnswerMutation.mutate({
+        questionId: currentQuestion.id,
+        answerText: finalAnswerText.trim(),
+      });
+    }
   };
 
   const handleAskHint = () => {
@@ -497,6 +539,7 @@ export default function LiveInterviewPage() {
             setIsCodingMode={setIsCodingMode}
             onSubmitAnswer={handleSubmitAnswer}
             isSubmitting={submitAnswerMutation.isPending}
+            isGeneratingFollowUp={generateFollowUpMutation.isPending}
             followUpCount={followUpCount}
             onNextQuestion={() => updateIndex(Math.min(currentIdx + 1, totalQuestions - 1))}
           />
