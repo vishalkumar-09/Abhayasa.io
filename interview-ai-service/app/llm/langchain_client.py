@@ -15,7 +15,7 @@ from app.schemas.report import ReportGenerationResponse
 logger = logging.getLogger("app")
 
 def strip_thinking_tokens(raw_text: str) -> str:
-    """Strips <think>...</think> reasoning traces emitted by DeepSeek/Qwen/Nemotron/Groq reasoning models."""
+    """Strips <think>...</think> reasoning traces and meta commentary emitted by LLMs."""
     if not raw_text:
         return ""
     text = str(raw_text).strip()
@@ -28,8 +28,11 @@ def strip_thinking_tokens(raw_text: str) -> str:
             cleaned = parts[-1].strip()
         else:
             cleaned = ""
-    # 3. Strip common reasoning prefixes
+    # 3. Strip common reasoning prefixes and markdown meta-analyses (e.g. **Analyze User Request:**)
+    cleaned = re.sub(r'(?i)\*{0,2}\.?\s*(?:Analyze User Request|Analyze User Prompt|Thinking Process|Reasoning Process|Step \d+|Task|Role|Topic|Prompt Analysis)\*{0,2}\s*:[\s\S]*?(?=\n\n|\{|"followup_question"|$)', '', cleaned).strip()
+    cleaned = re.sub(r'(?i)^\s*[\.\*]*\s*(?:Analyze|Role|Task|Topic)\s*:.*?(?=\?|$)', '', cleaned).strip()
     cleaned = re.sub(r'^(?:Thinking Process|Here is a thinking process|Let\'s think)[\s\S]*?\n\n', '', cleaned, flags=re.IGNORECASE).strip()
+    cleaned = re.sub(r'^[\s\.\*•-]+', '', cleaned).strip()
     return cleaned.strip()
 
 def extract_json_payload(raw_text: str) -> Any:
@@ -163,13 +166,15 @@ class LangChainClient:
         else:
             logger.warning("LangChain Client initialized with 0 API keys.")
 
-    def _build_llm(self, provider: str, model_name: str, api_key: str, temperature: float = 0.7, max_tokens: Optional[int] = None):
-        """Dynamically instantiates LangChain LLM with token length tightening for ultra-low latency."""
+    def _build_llm(self, provider: str, model_name: str, api_key: str, temperature: float = 0.7, max_tokens: Optional[int] = None, json_mode: bool = False):
+        """Dynamically instantiates LangChain LLM with native JSON mode support and token length tightening."""
         if provider == "groq":
             from langchain_groq import ChatGroq
             kw = {"model_name": model_name, "groq_api_key": api_key, "temperature": temperature, "max_retries": 1}
             if max_tokens:
                 kw["max_tokens"] = max_tokens
+            if json_mode:
+                kw["model_kwargs"] = {"response_format": {"type": "json_object"}}
             return ChatGroq(**kw)
         elif provider == "openrouter":
             from langchain_openai import ChatOpenAI
@@ -182,12 +187,16 @@ class LangChainClient:
             }
             if max_tokens:
                 kw["max_tokens"] = max_tokens
+            if json_mode:
+                kw["model_kwargs"] = {"response_format": {"type": "json_object"}}
             return ChatOpenAI(**kw)
         elif provider == "openai":
             from langchain_openai import ChatOpenAI
             kw = {"model_name": model_name, "api_key": api_key, "temperature": temperature, "max_retries": 1}
             if max_tokens:
                 kw["max_tokens"] = max_tokens
+            if json_mode:
+                kw["model_kwargs"] = {"response_format": {"type": "json_object"}}
             return ChatOpenAI(**kw)
         elif provider == "gemini":
             from langchain_google_genai import ChatGoogleGenerativeAI
@@ -204,7 +213,7 @@ class LangChainClient:
         else:
             raise ValueError(f"Unknown LLM provider: {provider}")
 
-    def execute_prompt(self, prompt_text: str, temperature: float = 0.7, max_tokens: Optional[int] = None) -> str:
+    def execute_prompt(self, prompt_text: str, temperature: float = 0.7, max_tokens: Optional[int] = None, json_mode: bool = False) -> str:
         """Executes LLM request via LangChain with instant failover and token tightening."""
         if not self.is_ready:
             raise ValueError("No LLM API keys configured. Set GEMINI_API_KEY, GROQ_API_KEY, or OPENAI_API_KEY in .env.")
@@ -220,7 +229,7 @@ class LangChainClient:
         for idx in candidate_indices:
             provider, model_name, api_key = self.active_pool[idx]
             try:
-                llm = self._build_llm(provider, model_name, api_key, temperature=temperature, max_tokens=max_tokens)
+                llm = self._build_llm(provider, model_name, api_key, temperature=temperature, max_tokens=max_tokens, json_mode=json_mode)
                 prompt = PromptTemplate.from_template("{input}")
                 chain = prompt | llm
                 response = chain.invoke({"input": prompt_text})
@@ -339,7 +348,7 @@ Resume Text:
             target_depth=target_depth
         )
         try:
-            res = self.execute_prompt(formatted, temperature=0.6, max_tokens=300)
+            res = self.execute_prompt(formatted, temperature=0.6, max_tokens=300, json_mode=True)
             
             # 1. Primary: Extract structured JSON payload
             q_text = ""
@@ -358,8 +367,14 @@ Resume Text:
             meta_keywords = [
                 "rollingavgscore", "instruction", "constraints:", "constraint", "primary question", 
                 "candidate answer", "we need to", "thinking process", "target depth", "follow-up number", 
-                "let's think", "first follow", "end with ?", "under 25 words", "critical rules", "strict json"
+                "let's think", "first follow", "end with ?", "under 25 words", "critical rules", "strict json",
+                "analyze user", "user request", "expert technical interviewer", "task:", "role:", "topic:",
+                "question:", "interviewer:", "follow-up question:", "followup_question"
             ]
+
+            # Strip markdown meta-analyses (e.g. **Analyze User Request:** - Role: ... - Task: ...)
+            q_text = re.sub(r'(?i)\*{0,2}\.?\s*(?:Analyze User Request|User Request|Role|Task|Topic)\*{0,2}\s*:[\s\S]*?(?=\?|$)', '', q_text).strip()
+
             lines = [line.strip() for line in q_text.split("\n") if line.strip()]
             clean_lines = [l for l in lines if not any(k in l.lower() for k in meta_keywords)]
             combined = " ".join(clean_lines).strip()
@@ -379,7 +394,7 @@ Resume Text:
                     if not any(q.lower() == h.lower() for h in (history or [])):
                         return q
 
-            # Ensure valid question
+            # Ensure valid question without any meta headers
             if combined and len(combined) > 15 and '<think>' not in combined.lower() and not any(k in combined.lower() for k in meta_keywords) and not any(combined.lower() == h.lower() for h in (history or [])):
                 if not combined.endswith('?'):
                     combined += '?'
