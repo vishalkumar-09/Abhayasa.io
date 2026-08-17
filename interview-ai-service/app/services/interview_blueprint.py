@@ -54,77 +54,67 @@ class BlueprintEngine:
         
         if interview_type.upper() == "HR":
             competencies = [
-                CompetencyWeight("Behavioral & Situational", 0.40, 5, {"MID": 1.0}),
-                CompetencyWeight("Culture Fit & Motivation", 0.25, 4, {"MID": 1.0}),
-                CompetencyWeight("Leadership & Teamwork", 0.20, 3, {"MID": 1.0}),
-                CompetencyWeight("Career Goals", 0.15, 3, {"MID": 1.0}),
+                CompetencyWeight("Behavioral & Situational", 0.30, 3, {"MID": 1.0}),
+                CompetencyWeight("Culture Fit & Motivation", 0.30, 3, {"MID": 1.0}),
+                CompetencyWeight("Leadership & Teamwork", 0.20, 2, {"MID": 1.0}),
+                CompetencyWeight("Career Goals", 0.20, 2, {"MID": 1.0}),
             ]
             role_type = "HR"
         else:
             if role_type == "BACKEND":
                 competencies = [
-                    CompetencyWeight("Core Language & OOP", 0.15, 2, {"MID": 0.7, "SENIOR": 0.3}),
-                    CompetencyWeight("APIs & Framework", 0.20, 3, {"MID": 0.6, "SENIOR": 0.4}),
-                    CompetencyWeight("Database & ORM", 0.15, 2, {"MID": 0.6, "SENIOR": 0.4}),
-                    CompetencyWeight("System Design", 0.15, 2, {"MID": 0.4, "SENIOR": 0.6}),
-                    CompetencyWeight("DSA & Problem Solving", 0.15, 2, {"JUNIOR": 0.2, "MID": 0.5, "SENIOR": 0.3}),
-                    CompetencyWeight("Resume Projects", 0.10, 2, {"MID": 0.5, "SENIOR": 0.5}),
-                    CompetencyWeight("Security & DevOps", 0.10, 2, {"MID": 0.7, "SENIOR": 0.3}),
+                    CompetencyWeight("Core Language & OOP", 0.20, 2, {"MID": 0.7, "SENIOR": 0.3}),
+                    CompetencyWeight("APIs & Framework", 0.20, 2, {"MID": 0.6, "SENIOR": 0.4}),
+                    CompetencyWeight("Database & ORM", 0.20, 2, {"MID": 0.6, "SENIOR": 0.4}),
+                    CompetencyWeight("Resume Projects", 0.20, 2, {"MID": 0.5, "SENIOR": 0.5}),
+                    CompetencyWeight("DSA & Problem Solving", 0.20, 2, {"JUNIOR": 0.2, "MID": 0.5, "SENIOR": 0.3}),
                 ]
             elif role_type == "FRONTEND":
                 competencies = [
-                    CompetencyWeight("Core JS/TS & Browser APIs", 0.20, 3, {"MID": 0.6, "SENIOR": 0.4}),
-                    CompetencyWeight("Framework (React/Vue/Angular)", 0.20, 3, {"MID": 0.6, "SENIOR": 0.4}),
-                    CompetencyWeight("State Management & Performance", 0.15, 2, {"MID": 0.5, "SENIOR": 0.5}),
-                    CompetencyWeight("CSS & Responsive Design", 0.10, 2, {"JUNIOR": 0.4, "MID": 0.6}),
-                    CompetencyWeight("DSA & Algorithms", 0.10, 2, {"MID": 0.6, "SENIOR": 0.4}),
-                    CompetencyWeight("Resume Projects", 0.15, 2, {"MID": 0.5, "SENIOR": 0.5}),
-                    CompetencyWeight("Testing & Tooling", 0.10, 1, {"MID": 0.7, "SENIOR": 0.3}),
+                    CompetencyWeight("Core JS/TS & Browser APIs", 0.20, 2, {"MID": 0.6, "SENIOR": 0.4}),
+                    CompetencyWeight("Frontend Frameworks", 0.20, 2, {"MID": 0.6, "SENIOR": 0.4}),
+                    CompetencyWeight("State Management & Performance", 0.20, 2, {"MID": 0.5, "SENIOR": 0.5}),
+                    CompetencyWeight("Resume Projects", 0.20, 2, {"MID": 0.5, "SENIOR": 0.5}),
+                    CompetencyWeight("DSA & Problem Solving", 0.20, 2, {"MID": 0.6, "SENIOR": 0.4}),
                 ]
             elif role_type == "FULLSTACK":
                 competencies = [
-                    CompetencyWeight("Backend APIs & DBs", 0.25, 4, {"MID": 0.6, "SENIOR": 0.4}),
-                    CompetencyWeight("Frontend Frameworks", 0.25, 4, {"MID": 0.6, "SENIOR": 0.4}),
-                    CompetencyWeight("System Design", 0.15, 2, {"MID": 0.4, "SENIOR": 0.6}),
-                    CompetencyWeight("Resume Projects", 0.15, 2, {"MID": 0.5, "SENIOR": 0.5}),
-                    CompetencyWeight("DSA & Problem Solving", 0.10, 2, {"JUNIOR": 0.2, "MID": 0.5, "SENIOR": 0.3}),
-                    CompetencyWeight("DevOps & CI/CD", 0.10, 1, {"MID": 0.7, "SENIOR": 0.3}),
+                    CompetencyWeight("Backend APIs & DBs", 0.20, 2, {"MID": 0.6, "SENIOR": 0.4}),
+                    CompetencyWeight("Frontend Frameworks", 0.20, 2, {"MID": 0.6, "SENIOR": 0.4}),
+                    CompetencyWeight("System Design & Architecture", 0.20, 2, {"MID": 0.4, "SENIOR": 0.6}),
+                    CompetencyWeight("Resume Projects", 0.20, 2, {"MID": 0.5, "SENIOR": 0.5}),
+                    CompetencyWeight("DSA & Problem Solving", 0.20, 2, {"JUNIOR": 0.2, "MID": 0.5, "SENIOR": 0.3}),
                 ]
             elif role_type == "ML":
                 competencies = [
-                    CompetencyWeight("ML Fundamentals & Math", 0.20, 3, {"MID": 0.5, "SENIOR": 0.5}),
-                    CompetencyWeight("Deep Learning & Frameworks", 0.20, 3, {"MID": 0.5, "SENIOR": 0.5}),
-                    CompetencyWeight("Data Engineering", 0.15, 2, {"MID": 0.6, "SENIOR": 0.4}),
-                    CompetencyWeight("Model Deployment & MLOps", 0.15, 2, {"MID": 0.4, "SENIOR": 0.6}),
-                    CompetencyWeight("Resume Projects", 0.15, 2, {"MID": 0.5, "SENIOR": 0.5}),
-                    CompetencyWeight("DSA & Python", 0.10, 2, {"JUNIOR": 0.2, "MID": 0.5, "SENIOR": 0.3}),
-                    CompetencyWeight("System Design for ML", 0.05, 1, {"SENIOR": 1.0}),
+                    CompetencyWeight("ML Fundamentals & Math", 0.20, 2, {"MID": 0.5, "SENIOR": 0.5}),
+                    CompetencyWeight("Deep Learning & Frameworks", 0.20, 2, {"MID": 0.5, "SENIOR": 0.5}),
+                    CompetencyWeight("Data Engineering & Pipelines", 0.20, 2, {"MID": 0.6, "SENIOR": 0.4}),
+                    CompetencyWeight("Resume Projects", 0.20, 2, {"MID": 0.5, "SENIOR": 0.5}),
+                    CompetencyWeight("DSA & Python", 0.20, 2, {"JUNIOR": 0.2, "MID": 0.5, "SENIOR": 0.3}),
                 ]
             elif role_type == "DEVOPS":
                 competencies = [
-                    CompetencyWeight("Containers & Orchestration", 0.25, 4, {"MID": 0.5, "SENIOR": 0.5}),
-                    CompetencyWeight("CI/CD Pipelines", 0.20, 3, {"MID": 0.5, "SENIOR": 0.5}),
-                    CompetencyWeight("Cloud Infrastructure", 0.20, 3, {"MID": 0.5, "SENIOR": 0.5}),
-                    CompetencyWeight("Monitoring & Observability", 0.15, 2, {"MID": 0.5, "SENIOR": 0.5}),
-                    CompetencyWeight("Resume Projects", 0.10, 2, {"MID": 0.5, "SENIOR": 0.5}),
-                    CompetencyWeight("Scripting & Automation", 0.10, 1, {"MID": 0.5, "SENIOR": 0.5}),
+                    CompetencyWeight("Containers & Kubernetes", 0.20, 2, {"MID": 0.5, "SENIOR": 0.5}),
+                    CompetencyWeight("CI/CD & Automation", 0.20, 2, {"MID": 0.5, "SENIOR": 0.5}),
+                    CompetencyWeight("Cloud Infrastructure", 0.20, 2, {"MID": 0.5, "SENIOR": 0.5}),
+                    CompetencyWeight("Resume Projects", 0.20, 2, {"MID": 0.5, "SENIOR": 0.5}),
+                    CompetencyWeight("Scripting & Problem Solving", 0.20, 2, {"MID": 0.5, "SENIOR": 0.5}),
                 ]
             elif role_type == "DATA":
                 competencies = [
-                    CompetencyWeight("SQL & Data Modeling", 0.25, 4, {"MID": 0.5, "SENIOR": 0.5}),
-                    CompetencyWeight("Big Data Frameworks", 0.20, 3, {"MID": 0.5, "SENIOR": 0.5}),
-                    CompetencyWeight("ETL & Pipeline Design", 0.20, 3, {"MID": 0.5, "SENIOR": 0.5}),
-                    CompetencyWeight("Data Quality & Testing", 0.10, 1, {"MID": 0.5, "SENIOR": 0.5}),
-                    CompetencyWeight("Resume Projects", 0.15, 2, {"MID": 0.5, "SENIOR": 0.5}),
-                    CompetencyWeight("Python & Scripting", 0.10, 2, {"MID": 0.5, "SENIOR": 0.5}),
+                    CompetencyWeight("SQL & Data Modeling", 0.20, 2, {"MID": 0.5, "SENIOR": 0.5}),
+                    CompetencyWeight("Big Data & Pipelines", 0.20, 2, {"MID": 0.5, "SENIOR": 0.5}),
+                    CompetencyWeight("ETL & Pipeline Design", 0.20, 2, {"MID": 0.5, "SENIOR": 0.5}),
+                    CompetencyWeight("Resume Projects", 0.20, 2, {"MID": 0.5, "SENIOR": 0.5}),
+                    CompetencyWeight("Python & Problem Solving", 0.20, 2, {"MID": 0.5, "SENIOR": 0.5}),
                 ]
             else:
                 competencies = [
-                    CompetencyWeight("Technical Knowledge", 0.30, 5, {"MID": 0.5, "SENIOR": 0.5}),
-                    CompetencyWeight("Problem Solving", 0.20, 3, {"MID": 0.5, "SENIOR": 0.5}),
-                    CompetencyWeight("System Design", 0.15, 2, {"MID": 0.5, "SENIOR": 0.5}),
-                    CompetencyWeight("Resume Projects", 0.20, 3, {"MID": 0.5, "SENIOR": 0.5}),
-                    CompetencyWeight("DSA", 0.15, 2, {"MID": 0.5, "SENIOR": 0.5}),
+                    CompetencyWeight("Technical Knowledge", 0.20, 2, {"MID": 0.5, "SENIOR": 0.5}),
+                    CompetencyWeight("System Architecture", 0.20, 2, {"MID": 0.5, "SENIOR": 0.5}),
+                    CompetencyWeight("Resume Projects", 0.30, 3, {"MID": 0.5, "SENIOR": 0.5}),
+                    CompetencyWeight("DSA & Problem Solving", 0.30, 3, {"MID": 0.5, "SENIOR": 0.5}),
                 ]
 
         total_questions = sum([c.question_count for c in competencies])
@@ -134,7 +124,7 @@ class BlueprintEngine:
             competencies=competencies,
             total_questions=total_questions,
             min_questions=10,
-            max_questions=18,
+            max_questions=10,
             difficulty=difficulty.upper() if difficulty else "MID",
             interview_type=interview_type.upper() if interview_type else "TECHNICAL"
         )

@@ -19,6 +19,7 @@ import com.interviewforge.dto.InterviewStateSnapshot;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.HashMap;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -81,6 +82,11 @@ public class InterviewService {
 
         Interview savedInterview = interviewRepository.save(interview);
 
+        Map<String, Object> resumeStructured = new HashMap<>();
+        if (resume.getSkills() != null && !resume.getSkills().isEmpty()) {
+            resumeStructured.put("skills", resume.getSkills());
+        }
+
         List<AiServiceClient.GeneratedQuestion> generatedQuestions = 
                 aiServiceClient.generateQuestions(
                         resume.getParsedText(), 
@@ -89,7 +95,7 @@ public class InterviewService {
                         jobDescription.getCompanyName(),
                         savedInterview.getInterviewType(),
                         List.of(),
-                        null,
+                        resumeStructured,
                         "FIRST"
                 );
 
@@ -251,8 +257,8 @@ public class InterviewService {
                         .interviewStartTime(state.getInterviewStartTime())
                         .currentDifficulty(adaptDifficulty(state, evaluation))
                         .rollingAvgScore(computeRollingAvg(interview, evaluation))
-                        .canEndEarly(newCount >= 10)
-                        .mustEnd(newCount >= 18 || isTimeExpired(state))
+                        .canEndEarly(newCount >= 1)
+                        .mustEnd(newCount >= 10 || isTimeExpired(state))
                         .elapsedMinutes(computeElapsed(state))
                         .build();
 
@@ -525,12 +531,12 @@ public class InterviewService {
         Question question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Question not found with id: " + questionId));
         
-        if (interview.getFollowUpsCurrentQuestion() != null && interview.getFollowUpsCurrentQuestion() >= 3) {
-            return new FollowUpResponse("Maximum follow-up questions reached for this topic. Please move to the next question.");
+        int historySize = (request.getHistory() != null) ? request.getHistory().size() : 0;
+        if (historySize >= 3) {
+            return new FollowUpResponse(null);
         }
-        interview.setFollowUpsCurrentQuestion(
-            interview.getFollowUpsCurrentQuestion() != null ? interview.getFollowUpsCurrentQuestion() + 1 : 1
-        );
+        
+        interview.setFollowUpsCurrentQuestion(historySize + 1);
         interviewRepository.save(interview);
         
         String currentQuestionContext = (request.getHistory() != null && !request.getHistory().isEmpty())

@@ -5,7 +5,10 @@ from typing import List
 from app.core.settings import settings
 from app.schemas.generator import QuestionGenerationRequest, QuestionGenerationResponse, GeneratedQuestionItem, FollowUpGenerationRequest, FollowUpGenerationResponse
 from app.llm.langchain_client import langchain_client
-from app.rag.retrieval import retrieval_service
+try:
+    from app.rag.retrieval import retrieval_service
+except Exception:
+    retrieval_service = None
 
 logger = logging.getLogger("app")
 
@@ -29,31 +32,48 @@ class QuestionGeneratorService:
             interview_type=interview_type
         )
         
-        # 2. Extract structured resume data
+        # 2. Extract structured resume data or parse from raw text
+        from app.services.parser_service import extract_heuristic_skills
         resume_structured = request.resume_structured or {}
         projects = resume_structured.get("projects", [])
         experience = resume_structured.get("experience", [])
         skills = resume_structured.get("skills", [])
         
-        # Format project details for the prompt
-        project_bullets = []
-        for p in projects[:5]:  # limit to 5 projects
-            title = p.get("title", p.get("name", "Project"))
-            tech = p.get("technologies", p.get("techStack", []))
-            desc = p.get("description", "")
-            if isinstance(tech, list):
-                tech = ", ".join(tech[:6])
-            project_bullets.append(f"- {title}: {tech}. {str(desc)[:200]}")
-        resume_projects_text = "\n".join(project_bullets) if project_bullets else "No projects listed."
+        # If skills missing, extract heuristics from resume_text
+        if not skills and request.resume_text:
+            skills = extract_heuristic_skills(request.resume_text)
+        if not skills and request.job_description_text:
+            skills = extract_heuristic_skills(request.job_description_text)
+            
+        # Format project details or extract from raw resume text
+        if projects:
+            project_bullets = []
+            for p in projects[:5]:
+                title = p.get("title", p.get("name", "Project"))
+                tech = p.get("technologies", p.get("techStack", []))
+                desc = p.get("description", "")
+                if isinstance(tech, list):
+                    tech = ", ".join(tech[:6])
+                project_bullets.append(f"- {title}: {tech}. {str(desc)[:200]}")
+            resume_projects_text = "\n".join(project_bullets)
+        elif request.resume_text:
+            # Extract meaningful lines from resume text as highlights
+            lines = [l.strip() for l in request.resume_text.split("\n") if len(l.strip()) > 25 and not l.strip().startswith("Page")]
+            resume_projects_text = "\n".join([f"- {l}" for l in lines[:8]]) if lines else "Candidate Resume Content:\n" + request.resume_text[:600]
+        else:
+            resume_projects_text = "No project details available."
         
         # Format experience
-        exp_bullets = []
-        for e in experience[:3]:
-            role = e.get("role", e.get("title", "Role"))
-            company = e.get("company", "Company")
-            duration = e.get("duration", "")
-            exp_bullets.append(f"- {role} at {company} ({duration})")
-        resume_exp_text = "\n".join(exp_bullets) if exp_bullets else "No experience listed."
+        if experience:
+            exp_bullets = []
+            for e in experience[:3]:
+                role = e.get("role", e.get("title", "Role"))
+                company = e.get("company", "Company")
+                duration = e.get("duration", "")
+                exp_bullets.append(f"- {role} at {company} ({duration})")
+            resume_exp_text = "\n".join(exp_bullets)
+        else:
+            resume_exp_text = "Not specified"
         
         # 3. Format blueprint for prompt
         competency_blueprint_text = "\n".join([
@@ -175,7 +195,12 @@ class QuestionGeneratorService:
                 ("Why are you interested in joining {company} as a {job_title}?", ["motivation", "career goals", "interest", target_company]),
                 ("Tell me about a time you had to learn a new technology quickly to solve a problem.", ["learning", "adaptability", "quick learning"]),
                 ("Where do you see yourself in five years professionally?", ["growth", "future goals", "career path"]),
-                ("How do you handle working under tight deadlines and high-pressure scenarios?", ["stress management", "prioritization", "pressure"])
+                ("How do you handle working under tight deadlines and high-pressure scenarios?", ["stress management", "prioritization", "pressure"]),
+                ("Describe a project where you took ownership of an ambiguous problem and delivered results.", ["ownership", "initiative", "problem solving"]),
+                ("How do you handle constructive feedback or criticism during code reviews?", ["feedback", "growth mindset", "collaboration"]),
+                ("Give an example of how you mentored or helped a team member succeed.", ["mentorship", "empathy", "teamwork"]),
+                ("What work environment or company culture enables you to perform at your best?", ["culture fit", "collaboration", "values"]),
+                ("Why should {company} hire you over other candidates for this {job_title} position?", ["strengths", "value add", target_company])
             ]
             for text, kw in hr_questions:
                 questions.append(GeneratedQuestionItem(
@@ -207,12 +232,10 @@ class QuestionGeneratorService:
                 "As a {job_title} at {company}, what are the best practices for structuring a production-ready application using {skill}?",
                 "How does concurrency and multi-threading work under the hood in {skill}?",
                 "Explain how dependency injection or module management is handled in {skill}.",
-                "What are the common memory leak patterns or bottlenecks in {skill} and how do you prevent them?",
-                "How do you handle database connections or session lifecycles in {skill}?",
-                "Explain the difference between synchronous and asynchronous operations in {skill}."
+                "What are the common memory leak patterns or bottlenecks in {skill} and how do you prevent them?"
             ]
             for i in range(4):
-                skill = job_skills[i % len(job_skills)]
+                skill = candidate_skills[i % len(candidate_skills)]
                 text = tech_templates[i % len(tech_templates)].format(
                     job_title=target_title, 
                     company=target_company, 

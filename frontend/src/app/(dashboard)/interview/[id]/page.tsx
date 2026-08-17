@@ -10,6 +10,7 @@ import { InterviewHeader } from "@/components/interview/InterviewHeader";
 import { QuestionCard } from "@/components/interview/QuestionCard";
 import { AnswerInputArea } from "@/components/interview/AnswerInputArea";
 import { ChatSidebar } from "@/components/interview/ChatSidebar";
+import { ReportGeneratingLoader } from "@/components/interview/ReportGeneratingLoader";
 import { Loader2, MessageSquare, Clock, Target, TrendingUp } from "lucide-react";
 
 /** Interview state snapshot returned by the backend after every answer submission. */
@@ -193,6 +194,7 @@ export default function LiveInterviewPage() {
     setCurrentIdx(idx);
     setFollowUpCount(0);
     setFollowUpQuestionText("");
+    setFollowUpQuestionsHistory([]);
     setAnswerText("");
     setCodeContent("");
     activeSpokenTextRef.current = "";
@@ -278,9 +280,11 @@ export default function LiveInterviewPage() {
       );
       return res.data;
     },
-    onSuccess: (data) => {
-      if (data?.followupQuestion) {
-        const text = data.followupQuestion;
+    onSuccess: (data, variables) => {
+      const text = data?.followupQuestion?.trim();
+      const isInvalid = !text || text.toLowerCase().includes("maximum follow-up");
+
+      if (!isInvalid) {
         setFollowUpCount((prev) => prev + 1);
         setFollowUpQuestionText(text);
         setFollowUpQuestionsHistory((prev) => [...prev, text]);
@@ -290,12 +294,23 @@ export default function LiveInterviewPage() {
           speakQuestion(text);
         }, 100);
       } else {
-        updateIndex(currentIdx + 1);
+        // Cap reached or no more follow-up — submit answer and advance to next main question
+        if (currentQuestion) {
+          submitAnswerMutation.mutate({
+            questionId: currentQuestion.id,
+            answerText: variables.answerText,
+          });
+        }
       }
     },
-    onError: (err: any) => {
-      console.warn("Follow-up generation error, moving to next main question:", err);
-      updateIndex(currentIdx + 1);
+    onError: (err: any, variables) => {
+      console.warn("Follow-up generation error, advancing:", err);
+      if (currentQuestion) {
+        submitAnswerMutation.mutate({
+          questionId: currentQuestion.id,
+          answerText: variables.answerText,
+        });
+      }
     },
   });
 
@@ -458,22 +473,20 @@ export default function LiveInterviewPage() {
   const handleSubmitAnswer = () => {
     if (!currentQuestion) return;
     const finalAnswerText = isCodingMode
-      ? `[CODE SOLUTION (${codeLanguage.toUpperCase()}:\n${codeContent}\n]\n${answerText}`
+      ? `[CODE SOLUTION (${codeLanguage.toUpperCase()}):\n${codeContent}\n]\n${answerText}`
       : answerText;
 
     if (!finalAnswerText.trim()) return;
 
-    // Backend enforces max 3 follow-ups; frontend mirrors this cap
-    const serverFollowUpCount = interviewState?.followUpsAskedCurrentQuestion ?? followUpCount;
-    if (serverFollowUpCount < 3) {
-      // Formulate adaptive AI follow-up question
+    // Trigger adaptive follow-up for the first 2 iterations on this question
+    if (followUpCount < 2) {
       generateFollowUpMutation.mutate({
         questionId: currentQuestion.id,
         answerText: finalAnswerText.trim(),
         history: followUpQuestionsHistory,
       });
     } else {
-      // Follow-up cap reached — submit and advance
+      // After follow-ups completed — finalize and advance
       submitAnswerMutation.mutate({
         questionId: currentQuestion.id,
         answerText: finalAnswerText.trim(),
@@ -515,6 +528,18 @@ export default function LiveInterviewPage() {
     );
   }
 
+  if (completeInterviewMutation.isPending) {
+    return (
+      <ReportGeneratingLoader
+        errorMsg={errorMsg}
+        onRetry={() => {
+          setErrorMsg(null);
+          completeInterviewMutation.mutate();
+        }}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
       {/* Isolated Memoized Header */}
@@ -540,19 +565,17 @@ export default function LiveInterviewPage() {
               <Target className="h-3.5 w-3.5 text-violet-400 shrink-0" />
               <span className="text-[11px] text-zinc-400 shrink-0 font-medium">
                 {interviewState.primaryQuestionsAsked}
-                <span className="text-zinc-600">/15</span>
+                <span className="text-zinc-600">/10</span>
                 <span className="text-zinc-600 ml-1">questions</span>
               </span>
               <div className="flex-1 h-1 bg-zinc-800 rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all duration-500"
                   style={{
-                    width: `${Math.min(100, (interviewState.primaryQuestionsAsked / 15) * 100)}%`,
-                    background: interviewState.primaryQuestionsAsked >= 15
+                    width: `${Math.min(100, (interviewState.primaryQuestionsAsked / 10) * 100)}%`,
+                    background: interviewState.primaryQuestionsAsked >= 10
                       ? 'linear-gradient(90deg, #22c55e, #16a34a)'
-                      : interviewState.primaryQuestionsAsked >= 10
-                        ? 'linear-gradient(90deg, #a78bfa, #7c3aed)'
-                        : 'linear-gradient(90deg, #6366f1, #818cf8)',
+                      : 'linear-gradient(90deg, #6366f1, #818cf8)',
                   }}
                 />
               </div>

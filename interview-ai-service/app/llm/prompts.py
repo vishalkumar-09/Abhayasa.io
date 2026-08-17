@@ -2,28 +2,32 @@
 """Centralized, structured LLM prompt templates for InterviewForge AI Service."""
 
 BLUEPRINT_QUESTION_PROMPT = """You are an expert technical interviewer.
-Generate exactly {question_count} interview questions based on the candidate's resume and job description.
+Generate exactly {question_count} interview questions strictly based on the candidate's verified skills and resume projects.
 Job Title: {job_title}
 Company: {company_name}
 Interview Type: {interview_type}
 Difficulty: {difficulty}
 
 Candidate Skills: {resume_skills}
-Candidate Experience: 
-{resume_experience}
-Candidate Projects: 
+Candidate Resume Projects & Highlights:
 {resume_projects}
 
-Job Requirements: 
+Candidate Experience:
+{resume_experience}
+
+Job Description Context:
 {jd_requirements}
 
-Previous Questions (DO NOT REPEAT THESE):
+Previous Questions (DO NOT REPEAT):
 {previous_questions}
 
-Target Competencies & Weights:
+Target Competencies:
 {competency_blueprint}
 
-Your questions must reference actual project names and specific technologies from the candidate's resume, not generic advice.
+STRICT GENERATION RULES:
+1. Every technical, architecture, and project question MUST directly reference and test the candidate's actual skills ({resume_skills}) and projects ({resume_projects}).
+2. Do NOT ask questions about unrelated tools or languages that are absent from both the candidate's resume and the job description.
+3. Generate exactly {question_count} distinct questions (no generic or duplicate questions).
 
 Return ONLY a valid JSON object in this exact schema:
 {{

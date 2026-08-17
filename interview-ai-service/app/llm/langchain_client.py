@@ -66,8 +66,10 @@ PROVIDER_MODELS = {
         "llama-3.1-8b-instant"
     ],
     "gemini": [
+        "gemini-flash-lite-latest",
+        "gemini-3.1-flash-lite",
         "gemini-2.5-flash",
-        "gemini-1.5-flash"
+        "gemini-pro-latest"
     ],
     "openai": [
         "gpt-4o-mini",
@@ -276,29 +278,31 @@ Resume Text:
         formatted = ADAPTIVE_FOLLOWUP_PROMPT.format(
             question_text=safe_question,
             answer_text=safe_answer,
-            history=safe_history,
+            history=safe_history if safe_history else "None",
             candidate_state=state_json,
             follow_up_number=follow_up_number
         )
         try:
-            res = self.execute_prompt(formatted, temperature=0.5, max_tokens=60)
-            return res.strip().replace('"', '')
+            res = self.execute_prompt(formatted, temperature=0.7, max_tokens=60)
+            cleaned = res.strip().replace('"', '')
+            # Ensure it's not empty and not identical to any previous follow-up in history
+            if cleaned and len(cleaned) > 10 and not any(cleaned.lower() == h.lower() for h in (history or [])):
+                return cleaned
+            return self._fallback_followup(safe_question, safe_answer, history, candidate_state)
         except Exception as e:
             logger.error("Follow-up generation error: %s", str(e))
-            return self._fallback_followup(safe_question, safe_answer, candidate_state)
+            return self._fallback_followup(safe_question, safe_answer, history, candidate_state)
 
-    def _fallback_followup(self, question_text: str, answer_text: str, candidate_state: dict = None) -> str:
-        """Local fallback follow-up generation."""
-        from app.services.parser_service import extract_heuristic_skills
-        found = extract_heuristic_skills(answer_text + " " + question_text)
-        tech = found[0] if found else "that implementation"
-        score = (candidate_state or {}).get("rollingAvgScore", 7.0)
-        if score < 5:
-            return f"Can you explain at a basic level what {tech} is and when you would use it?"
-        elif score >= 8:
-            return f"In a system handling 10 million daily requests, what specific {tech} optimizations would you apply?"
-        else:
-            return f"What trade-offs did you consider when choosing {tech} for this use case?"
+    def _fallback_followup(self, question_text: str, answer_text: str, history: List[str] = None, candidate_state: dict = None) -> str:
+        """Dynamic heuristic fallback that extracts candidate's exact spoken points and avoids repeating previous questions."""
+        from app.services.generator_service import question_generator_service
+        from app.schemas.generator import FollowUpGenerationRequest
+        req = FollowUpGenerationRequest(
+            question_text=question_text,
+            answer_text=answer_text,
+            history=history or []
+        )
+        return question_generator_service.generate_followup_fallback(req)
 
     def evaluate_answer_with_evidence(self, question_text: str, answer_text: str, expected_keywords: List[str] = None, difficulty: str = "MEDIUM") -> AnswerEvaluationResponse:
         """Evidence-aware evaluation returning verbatim evidence quotes and missed concepts."""
