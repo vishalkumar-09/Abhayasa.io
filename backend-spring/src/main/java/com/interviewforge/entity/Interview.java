@@ -41,6 +41,20 @@ public class Interview {
     @Builder.Default
     private String interviewType = "TECHNICAL";
 
+    @Column(name = "interview_state", columnDefinition = "TEXT")
+    private String interviewState;
+
+    @Column(name = "interview_start_time")
+    private LocalDateTime interviewStartTime;
+
+    @Column(name = "primary_questions_asked")
+    @Builder.Default
+    private Integer primaryQuestionsAsked = 0;
+
+    @Column(name = "follow_ups_current_question")
+    @Builder.Default
+    private Integer followUpsCurrentQuestion = 0;
+
     @OneToMany(mappedBy = "interview", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<Question> questions;
 

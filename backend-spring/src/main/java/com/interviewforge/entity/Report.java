@@ -45,6 +45,15 @@ public class Report {
     @Column(columnDefinition = "TEXT")
     private String recommendations;
 
+    @Column(name = "competency_breakdown", columnDefinition = "TEXT")
+    private String competencyBreakdown;
+
+    @Column(name = "readiness", length = 50)
+    private String readiness;
+
+    @Column(name = "readiness_score")
+    private Integer readinessScore;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

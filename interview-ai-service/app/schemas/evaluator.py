@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional
 
 class AnswerEvaluationRequest(BaseModel):
     questionText: str = Field(description="The interview question that was asked")
@@ -23,3 +23,6 @@ class AnswerEvaluationResponse(BaseModel):
     score: int = Field(
         description="The overall aggregated score from 0 to 10. (Will be calculated as the mathematical average of the four scores)"
     )
+    evidenceQuote: Optional[str] = Field(default=None, description="Verbatim phrase from the answer used as evaluation evidence")
+    missedConcepts: Optional[List[str]] = Field(default_factory=list, description="Expected concepts not mentioned in the answer")
+    answerStrength: Optional[str] = Field(default="PARTIAL", description="STRONG | PARTIAL | WEAK | BLANK")

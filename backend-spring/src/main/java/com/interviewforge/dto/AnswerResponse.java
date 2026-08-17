@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -20,4 +22,7 @@ public class AnswerResponse {
     private Integer communicationScore;
     private Integer depthScore;
     private Integer completenessScore;
+    
+    private String answerStrength;
+    private List<String> missedConcepts;
 }

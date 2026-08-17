@@ -13,6 +13,7 @@ import org.springframework.web.client.RestClient;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Component
@@ -47,6 +48,9 @@ public class AiServiceClient {
         private String jobTitle;
         private String companyName;
         private String interviewType;
+        private List<String> previousQuestions;
+        private Object resumeStructured;
+        private String interviewRound;
     }
 
     @Data
@@ -88,6 +92,9 @@ public class AiServiceClient {
         private Integer communicationScore;
         private Integer depthScore;
         private Integer completenessScore;
+        private String evidenceQuote;
+        private List<String> missedConcepts;
+        private String answerStrength;
     }
 
     @Data
@@ -104,8 +111,16 @@ public class AiServiceClient {
             private List<String> expectedKeywords;
             private Integer score;
             private String feedback;
+            private String category;
+            private String competency;
         }
         private List<AnswerDetails> answers;
+        private String jobTitle;
+        private String companyName;
+        private String interviewType;
+        private String difficulty;
+        private List<String> resumeSkills;
+        private List<String> competencyNames;
     }
 
     @Data
@@ -121,6 +136,11 @@ public class AiServiceClient {
         private List<String> missingConcepts;
         private List<String> improvementRoadmap;
         private String recommendations;
+        private String readiness;
+        private Integer readinessScore;
+        private List<Map<String, Object>> competencyBreakdown;
+        private Map<String, Object> roleAlignment;
+        private List<String> nextInterviewPlan;
     }
 
     // =========================================================================
@@ -160,13 +180,19 @@ public class AiServiceClient {
         }
     }
 
-    public List<GeneratedQuestion> generateQuestions(String resumeText, String jobDescriptionText, String jobTitle, String companyName, String interviewType) {
+    public List<GeneratedQuestion> generateQuestions(
+            String resumeText, String jobDescriptionText, 
+            String jobTitle, String companyName, String interviewType,
+            List<String> previousQuestions, Object resumeStructured, String interviewRound) {
         QuestionGenerationRequest requestBody = new QuestionGenerationRequest();
         requestBody.setResumeText(resumeText != null && !resumeText.isBlank() ? resumeText : "Generic Resume Text");
         requestBody.setJobDescriptionText(jobDescriptionText != null && !jobDescriptionText.isBlank() ? jobDescriptionText : "Generic Job Description");
         requestBody.setJobTitle(jobTitle != null && !jobTitle.isBlank() ? jobTitle : "Software Engineer");
         requestBody.setCompanyName(companyName != null && !companyName.isBlank() ? companyName : "the target company");
         requestBody.setInterviewType(interviewType != null ? interviewType : "TECHNICAL");
+        requestBody.setPreviousQuestions(previousQuestions != null ? previousQuestions : List.of());
+        requestBody.setResumeStructured(resumeStructured);
+        requestBody.setInterviewRound(interviewRound != null ? interviewRound : "FIRST");
 
         try {
             QuestionGenerationResponse response = restClient.post()
@@ -214,8 +240,17 @@ public class AiServiceClient {
         }
     }
 
-    public ReportGenerationResponse generateReport(List<ReportGenerationRequest.AnswerDetails> answers) {
-        ReportGenerationRequest requestBody = new ReportGenerationRequest(answers);
+    public ReportGenerationResponse generateReport(
+            List<ReportGenerationRequest.AnswerDetails> answers,
+            String jobTitle, String companyName, String interviewType,
+            String difficulty, List<String> resumeSkills) {
+        ReportGenerationRequest requestBody = new ReportGenerationRequest();
+        requestBody.setAnswers(answers);
+        requestBody.setJobTitle(jobTitle);
+        requestBody.setCompanyName(companyName);
+        requestBody.setInterviewType(interviewType);
+        requestBody.setDifficulty(difficulty != null ? difficulty : "MID");
+        requestBody.setResumeSkills(resumeSkills != null ? resumeSkills : List.of());
         try {
             return restClient.post()
                     .uri("/api/v1/generate-report")

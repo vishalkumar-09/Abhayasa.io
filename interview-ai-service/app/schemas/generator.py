@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, AliasChoices
 from typing import List, Optional
 
 class QuestionGenerationRequest(BaseModel):
@@ -10,6 +10,9 @@ class QuestionGenerationRequest(BaseModel):
     job_title: Optional[str] = Field(None, validation_alias="jobTitle", description="The target job title")
     company_name: Optional[str] = Field(None, validation_alias="companyName", description="The target company name")
     interview_type: Optional[str] = Field("TECHNICAL", validation_alias="interviewType", description="The type of interview: TECHNICAL or HR")
+    previous_questions: Optional[List[str]] = Field(default_factory=list, validation_alias=AliasChoices('previousQuestions', 'previous_questions'), description="Already-asked question texts for anti-repetition")
+    resume_structured: Optional[dict] = Field(default=None, validation_alias=AliasChoices('resumeStructured', 'resume_structured'), description="Parsed resume JSON with skills, projects, experience")
+    interview_round: Optional[str] = Field(default="FIRST", validation_alias=AliasChoices('interviewRound', 'interview_round'), description="FIRST, TECHNICAL, or FINAL")
 
 class GeneratedQuestionItem(BaseModel):
     question_text: str = Field(description="The formulated interview question")
@@ -18,10 +21,12 @@ class GeneratedQuestionItem(BaseModel):
     expected_keywords: List[str] = Field(
         description="Key programming terms, tools, methodologies, or concepts expected in the candidate's response"
     )
+    competency: Optional[str] = Field(default=None, description="Which blueprint competency this question evaluates")
+    is_primary: Optional[bool] = Field(default=True, description="True for primary questions, False for follow-ups")
 
 class QuestionGenerationResponse(BaseModel):
     questions: List[GeneratedQuestionItem] = Field(
-        description="List of exactly 45 generated questions (20 RESUME, 20 TECHNICAL, 3 DSA, 2 HR)"
+        description="List of generated questions (target 15, min 10, max 18 primary questions)"
     )
 
 class FollowUpGenerationRequest(BaseModel):

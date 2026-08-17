@@ -60,6 +60,17 @@ export default function ReportPage() {
 
   const overallScore = report.overallScore !== undefined ? Number(report.overallScore) : 0;
   const questions = report.questions || [];
+  const competencyBreakdown: { name: string; score: number; evidence?: string }[] = report.competencyBreakdown || [];
+  const readiness: string | null = report.readiness || null;
+  const readinessScore: number = report.readinessScore ?? 0;
+  const nextInterviewPlan: string[] = report.nextInterviewPlan || [];
+
+  const readinessConfig = {
+    INTERVIEW_READY: { label: "Interview Ready", color: "text-emerald-400", bg: "bg-emerald-400/10 border-emerald-500/20" },
+    NEEDS_IMPROVEMENT: { label: "Needs Improvement", color: "text-amber-400", bg: "bg-amber-400/10 border-amber-500/20" },
+    NOT_READY: { label: "Not Ready", color: "text-red-400", bg: "bg-red-400/10 border-red-500/20" },
+  };
+  const rdConfig = readiness ? readinessConfig[readiness as keyof typeof readinessConfig] : null;
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6 md:p-10">
@@ -79,6 +90,67 @@ export default function ReportPage() {
         {/* Performance Metrics Bar Graphs */}
         <PerformanceMetricsCard overallScore={overallScore} />
 
+        {/* Readiness Badge */}
+        {rdConfig && (
+          <div className={`rounded-2xl border p-5 flex items-center justify-between gap-4 ${rdConfig.bg}`}>
+            <div>
+              <p className="text-[11px] uppercase tracking-widest text-zinc-500 font-semibold mb-1">Interview Readiness</p>
+              <p className={`text-lg font-bold ${rdConfig.color}`}>{rdConfig.label}</p>
+              <p className="text-xs text-zinc-400 mt-0.5">Based on overall performance across all competencies</p>
+            </div>
+            <div className="flex flex-col items-center gap-1 shrink-0">
+              <div className="relative h-16 w-16">
+                <svg className="h-16 w-16 -rotate-90" viewBox="0 0 36 36">
+                  <circle cx="18" cy="18" r="15.9" fill="none" stroke="#27272a" strokeWidth="3"/>
+                  <circle
+                    cx="18" cy="18" r="15.9" fill="none" strokeWidth="3"
+                    stroke={readiness === 'INTERVIEW_READY' ? '#22c55e' : readiness === 'NOT_READY' ? '#ef4444' : '#f59e0b'}
+                    strokeDasharray={`${readinessScore} 100`}
+                    strokeLinecap="round"
+                  />
+                </svg>
+                <span className={`absolute inset-0 flex items-center justify-center text-sm font-bold ${rdConfig.color}`}>
+                  {readinessScore}
+                </span>
+              </div>
+              <span className="text-[10px] text-zinc-500">/ 100</span>
+            </div>
+          </div>
+        )}
+
+        {/* Competency Breakdown */}
+        {competencyBreakdown.length > 0 && (
+          <div className="glass-card rounded-2xl border border-zinc-800/80 p-6">
+            <h3 className="text-sm font-bold text-white mb-4">Competency Breakdown</h3>
+            <div className="flex flex-col gap-3">
+              {competencyBreakdown.map((comp, i) => (
+                <div key={i}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-zinc-300 font-medium">{comp.name}</span>
+                    <span className="text-xs font-bold text-zinc-200">{comp.score}<span className="text-zinc-600">/100</span></span>
+                  </div>
+                  <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-700"
+                      style={{
+                        width: `${comp.score}%`,
+                        background: comp.score >= 75
+                          ? 'linear-gradient(90deg, #22c55e, #16a34a)'
+                          : comp.score >= 50
+                            ? 'linear-gradient(90deg, #a78bfa, #7c3aed)'
+                            : 'linear-gradient(90deg, #ef4444, #dc2626)',
+                      }}
+                    />
+                  </div>
+                  {comp.evidence && (
+                    <p className="text-[10px] text-zinc-500 mt-0.5 italic">&ldquo;{comp.evidence}&rdquo;</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Strengths & Weaknesses Grid */}
         <StrengthsWeaknessesGrid
           strengths={report.strengths}
@@ -92,10 +164,28 @@ export default function ReportPage() {
           strengths={report.strengths}
         />
 
+        {/* Personalised Next Interview Plan */}
+        {nextInterviewPlan.length > 0 && (
+          <div className="glass-card rounded-2xl border border-zinc-800/80 p-6">
+            <h3 className="text-sm font-bold text-white mb-1">Your Personalised Preparation Plan</h3>
+            <p className="text-[11px] text-zinc-500 mb-4">Specific steps to ace your next interview based on the gaps found today.</p>
+            <ol className="flex flex-col gap-3">
+              {nextInterviewPlan.map((step, i) => (
+                <li key={i} className="flex gap-3">
+                  <span className="shrink-0 h-5 w-5 rounded-full bg-violet-600/20 border border-violet-500/30 flex items-center justify-center text-[10px] font-bold text-violet-300">
+                    {i + 1}
+                  </span>
+                  <span className="text-xs text-zinc-300 leading-relaxed">{step}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+
         {/* Question-by-Question Reviews */}
         <div className="flex flex-col gap-4">
           <h3 className="text-sm font-bold text-white tracking-wide uppercase text-zinc-400">
-            Question-by-Question Feedback & Critique
+            Question-by-Question Feedback &amp; Critique
           </h3>
           <div className="flex flex-col gap-6">
             {questions.map((q: any, idx: number) => (

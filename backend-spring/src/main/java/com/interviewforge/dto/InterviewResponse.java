@@ -20,4 +20,6 @@ public class InterviewResponse {
     private List<QuestionResponse> questions;
     private String interviewType;
     private LocalDateTime createdAt;
+    
+    private InterviewStateSnapshot interviewState;
 }

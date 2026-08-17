@@ -14,92 +14,127 @@ class QuestionGeneratorService:
         self.is_ready = True
 
     def generate_interview_questions(self, request: QuestionGenerationRequest) -> QuestionGenerationResponse:
-        """Generates exactly 45 interview questions (20 Resume, 20 Technical, 3 DSA, 2 HR) based on RAG context."""
+        """Generates a blueprint-driven pool of 15-18 questions."""
+        from app.services.interview_blueprint import blueprint_service
+        from app.llm.prompts import BLUEPRINT_QUESTION_PROMPT
         
-        # 1. RAG Context Lookup (Match Job Description keywords to Candidate Resume chunks in Qdrant)
+        interview_type = (request.interview_type or "TECHNICAL").upper()
+        difficulty = (request.difficulty or "MID").upper()
+        
+        # 1. Create interview blueprint
+        bp = blueprint_service.create_blueprint(
+            job_title=request.job_title or "Software Engineer",
+            jd_text=request.job_description_text or "",
+            difficulty=difficulty,
+            interview_type=interview_type
+        )
+        
+        # 2. Extract structured resume data
+        resume_structured = request.resume_structured or {}
+        projects = resume_structured.get("projects", [])
+        experience = resume_structured.get("experience", [])
+        skills = resume_structured.get("skills", [])
+        
+        # Format project details for the prompt
+        project_bullets = []
+        for p in projects[:5]:  # limit to 5 projects
+            title = p.get("title", p.get("name", "Project"))
+            tech = p.get("technologies", p.get("techStack", []))
+            desc = p.get("description", "")
+            if isinstance(tech, list):
+                tech = ", ".join(tech[:6])
+            project_bullets.append(f"- {title}: {tech}. {str(desc)[:200]}")
+        resume_projects_text = "\n".join(project_bullets) if project_bullets else "No projects listed."
+        
+        # Format experience
+        exp_bullets = []
+        for e in experience[:3]:
+            role = e.get("role", e.get("title", "Role"))
+            company = e.get("company", "Company")
+            duration = e.get("duration", "")
+            exp_bullets.append(f"- {role} at {company} ({duration})")
+        resume_exp_text = "\n".join(exp_bullets) if exp_bullets else "No experience listed."
+        
+        # 3. Format blueprint for prompt
+        competency_blueprint_text = "\n".join([
+            f"- {c.name}: {c.question_count} questions ({int(c.weight*100)}% weight)"
+            for c in bp.competencies
+        ])
+        
+        # 4. Format previous questions for anti-repetition
+        prev_q_text = "\n".join([f"- {q}" for q in (request.previous_questions or [])[:20]])
+        
+        # 5. RAG context (if available)
         rag_context = ""
         if request.resume_id is not None:
             try:
                 hits = retrieval_service.retrieve_context(
                     query=request.job_description_text,
-                    limit=5,
+                    limit=4,
                     resume_id=request.resume_id
                 )
                 if hits:
-                    rag_context = "\n\n".join([f"Resume Segment: {hit['text']}" for hit in hits])
-                    logger.info("RAG context successfully loaded from Qdrant: %d segments", len(hits))
+                    rag_context = "\n".join([f"Resume Segment: {hit['text'][:200]}" for hit in hits])
             except Exception as e:
-                logger.error("RAG context lookup failed: %s", str(e))
-
-        # 2. Check if API key is valid, else fallback to mock questions
-        interview_type = request.interview_type.upper() if request.interview_type else "TECHNICAL"
-
-        # 2. Check if rolling LLM client is ready, else fallback to mock questions
+                logger.error("RAG lookup failed: %s", str(e))
+        
+        # 6. Check if LLM is ready
         if not langchain_client.is_ready:
-            logger.info("Rolling LLMs not ready. Returning mock questions list.")
             return self.get_mock_questions_response(
-                request.difficulty, 
-                request.resume_text, 
-                request.job_description_text,
-                request.job_title,
-                request.company_name,
-                interview_type
+                difficulty, request.resume_text, request.job_description_text,
+                request.job_title, request.company_name, interview_type
             )
- 
-        # 3. Assemble Prompt dynamically based on interview type
-        if interview_type == "HR":
-            prompt = f"""
-            You are an expert HR manager. Generate an HR and behavioral interview question set.
-            
-            Difficulty level: {request.difficulty}
-            Target Company Name: {request.company_name or 'the company'}
-            Target Job Title: {request.job_title or 'the role'}
-            
-            Candidate Resume text (for cultural/background context):
-            {request.resume_text}
-            
-            You MUST generate exactly 5 questions categorized as follows:
-            - "HR" (5 questions): behavioral, situational, conflict resolution, communication, interest in joining {request.company_name or 'the company'}, and career path.
-            
-            Enforce that all questions match the {request.difficulty} difficulty level. Provide relevant expected_keywords for each question.
-            """
-        else:
-            prompt = f"""
-            You are an elite technical interviewer. Generate a technical interview question set tailored to the candidate's resume and target job description.
-            
-            Difficulty level required: {request.difficulty}
-            
-            Candidate Resume:
-            {request.resume_text}
-            
-            {"Semantic RAG Resume Highlights (focus on these areas):" if rag_context else ""}
-            {rag_context}
-            
-            Job Description Requirements:
-            {request.job_description_text}
-            
-            You MUST generate exactly 10 questions categorized as follows:
-            1. "DSA" (2 questions): Algorithms, data structures, complexity, and coding puzzles (e.g. arrays, strings, dynamic programming, linked lists, trees) matching the {request.difficulty} difficulty.
-            2. "TECHNICAL" (4 questions): Evaluating core technologies, concepts, and architectural principles required for the job description.
-            3. "RESUME" (4 questions): Specific technical questions probing the technical projects, achievements, technologies, and developer decisions mentioned in the resume.
-            
-            Enforce that all questions match the {request.difficulty} difficulty level. Provide relevant expected_keywords for each question.
-            """
- 
+        
+        # 7. Build prompt
+        prompt = BLUEPRINT_QUESTION_PROMPT.format(
+            job_title=request.job_title or "Software Engineer",
+            company_name=request.company_name or "the target company",
+            interview_type=interview_type,
+            difficulty=difficulty,
+            competency_blueprint=competency_blueprint_text,
+            resume_projects=resume_projects_text,
+            resume_experience=resume_exp_text,
+            resume_skills=", ".join(skills[:20]) if skills else "Not specified",
+            jd_requirements=(request.job_description_text or "")[:1500],
+            previous_questions=prev_q_text if prev_q_text else "None",
+            question_count=bp.total_questions,
+            rag_context=f"\n\nRelevant Resume Context (from semantic search):\n{rag_context}" if rag_context else ""
+        )
+        
         try:
-            return langchain_client.generate_interview_questions_rag(prompt)
- 
+            result = langchain_client.generate_interview_questions_rag(prompt)
+            
+            # Validate minimum question count
+            if len(result.questions) < 8:
+                logger.warning("LLM returned only %d questions, falling back.", len(result.questions))
+                return self.get_mock_questions_response(
+                    difficulty, request.resume_text, request.job_description_text,
+                    request.job_title, request.company_name, interview_type
+                )
+            
+            # Anti-repetition: remove questions too similar to previous
+            prev_lower = [q.lower() for q in (request.previous_questions or [])]
+            filtered = []
+            for q in result.questions:
+                q_lower = q.question_text.lower()
+                is_duplicate = any(
+                    len(set(q_lower.split()) & set(p.split())) / max(len(q_lower.split()), 1) > 0.6
+                    for p in prev_lower
+                )
+                if not is_duplicate:
+                    filtered.append(q)
+            result.questions = filtered if len(filtered) >= 8 else result.questions
+            
+            logger.info("Generated %d blueprint-driven questions for %s role.", len(result.questions), bp.role_type)
+            return result
+            
         except Exception as e:
-            logger.error("Error during Gemini question generation: %s. Falling back to mock questions.", str(e))
+            logger.error("Blueprint question generation failed: %s. Falling back to mock.", str(e))
             return self.get_mock_questions_response(
-                request.difficulty, 
-                request.resume_text, 
-                request.job_description_text,
-                request.job_title,
-                request.company_name,
-                interview_type
+                difficulty, request.resume_text, request.job_description_text,
+                request.job_title, request.company_name, interview_type
             )
- 
+
     def get_mock_questions_response(
         self, 
         difficulty: str, 
@@ -254,18 +289,18 @@ class QuestionGeneratorService:
         return options[0]
 
     def generate_followup_question(self, request: FollowUpGenerationRequest) -> FollowUpGenerationResponse:
-        """Generates a contextual follow-up question via LangChain Rolling LLMs."""
         try:
             followup_text = langchain_client.generate_followup_question(
                 question_text=request.question_text,
                 answer_text=request.answer_text,
-                history=request.history
+                history=request.history,
+                candidate_state=getattr(request, 'candidate_state', None)
             )
             return FollowUpGenerationResponse(followupQuestion=followup_text)
         except Exception as e:
-            logger.error("Error during LangChain follow-up generation: %s. Using local fallback.", str(e))
-            fallback_text = self.generate_followup_fallback(request)
-            return FollowUpGenerationResponse(followupQuestion=fallback_text)
+            logger.error("Follow-up generation error: %s. Using fallback.", str(e))
+            fallback = self.generate_followup_fallback(request)
+            return FollowUpGenerationResponse(followupQuestion=fallback)
  
 # Singleton instance
 question_generator_service = QuestionGeneratorService()

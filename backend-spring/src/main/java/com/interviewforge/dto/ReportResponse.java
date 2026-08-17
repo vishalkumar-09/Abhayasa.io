@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @Data
 @Builder
@@ -25,4 +26,11 @@ public class ReportResponse {
     private String recommendations;
     private List<QuestionResponse> questions;
     private LocalDateTime createdAt;
+    
+    private String readiness;
+    private Integer readinessScore;
+    private List<Map<String, Object>> competencyBreakdown;
+    private Map<String, Object> roleAlignment;
+    private List<String> nextInterviewPlan;
+    private List<String> missingConcepts;
 }

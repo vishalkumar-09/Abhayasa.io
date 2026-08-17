@@ -10,7 +10,21 @@ import { InterviewHeader } from "@/components/interview/InterviewHeader";
 import { QuestionCard } from "@/components/interview/QuestionCard";
 import { AnswerInputArea } from "@/components/interview/AnswerInputArea";
 import { ChatSidebar } from "@/components/interview/ChatSidebar";
-import { Loader2, MessageSquare } from "lucide-react";
+import { Loader2, MessageSquare, Clock, Target, TrendingUp } from "lucide-react";
+
+/** Interview state snapshot returned by the backend after every answer submission. */
+interface InterviewStateSnapshot {
+  primaryQuestionsAsked: number;
+  followUpsAskedCurrentQuestion: number;
+  competenciesEvaluated: string[];
+  competenciesRequired: string[];
+  interviewStartTime: string | null;
+  elapsedMinutes: number;
+  currentDifficulty: "JUNIOR" | "MID" | "SENIOR";
+  rollingAvgScore: number;
+  canEndEarly: boolean;
+  mustEnd: boolean;
+}
 
 // Dynamic Code Editor import with SSR disabled to eliminate 3MB bundle bloat from initial route load
 const MonacoCodeEditor = dynamic(
@@ -63,6 +77,9 @@ export default function LiveInterviewPage() {
   const [followUpQuestionsHistory, setFollowUpQuestionsHistory] = useState<string[]>([]);
   const lastSpokenQuestionIdRef = useRef<number | null>(null);
   const activeSpokenTextRef = useRef<string>("");
+
+  // Interview State Snapshot (from backend)
+  const [interviewState, setInterviewState] = useState<InterviewStateSnapshot | null>(null);
 
   // Code Sandbox States
   const [codeContent, setCodeContent] = useState("");
@@ -140,6 +157,20 @@ export default function LiveInterviewPage() {
     },
     enabled: !!interviewId,
   });
+
+  // Seed interviewState from query data on first load
+  useEffect(() => {
+    if (interview?.interviewState && !interviewState) {
+      setInterviewState(interview.interviewState);
+    }
+  }, [interview]);
+
+  // Auto-complete when backend signals hard stop (18 questions or 45 min)
+  useEffect(() => {
+    if (interviewState?.mustEnd && !completeInterviewMutation.isPending) {
+      setShowCompleteModal(true);
+    }
+  }, [interviewState?.mustEnd]);
 
   const questions = interview?.questions || [];
   const totalQuestions = questions.length;
@@ -401,10 +432,14 @@ export default function LiveInterviewPage() {
       );
       return res.data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       setAnswerText("");
       setCodeContent("");
       setErrorMsg(null);
+      // Update local interview state snapshot from answer response
+      if (data?.interviewState) {
+        setInterviewState(data.interviewState);
+      }
       queryClient.invalidateQueries({ queryKey: ["interview", interviewId] });
 
       if (currentIdx < totalQuestions - 1) {
@@ -423,12 +458,14 @@ export default function LiveInterviewPage() {
   const handleSubmitAnswer = () => {
     if (!currentQuestion) return;
     const finalAnswerText = isCodingMode
-      ? `[CODE SOLUTION (${codeLanguage.toUpperCase()}):\n${codeContent}\n]\n${answerText}`
+      ? `[CODE SOLUTION (${codeLanguage.toUpperCase()}:\n${codeContent}\n]\n${answerText}`
       : answerText;
 
     if (!finalAnswerText.trim()) return;
 
-    if (followUpCount < 2) {
+    // Backend enforces max 3 follow-ups; frontend mirrors this cap
+    const serverFollowUpCount = interviewState?.followUpsAskedCurrentQuestion ?? followUpCount;
+    if (serverFollowUpCount < 3) {
       // Formulate adaptive AI follow-up question
       generateFollowUpMutation.mutate({
         questionId: currentQuestion.id,
@@ -436,7 +473,7 @@ export default function LiveInterviewPage() {
         history: followUpQuestionsHistory,
       });
     } else {
-      // Complete question block evaluation and advance to next question
+      // Follow-up cap reached — submit and advance
       submitAnswerMutation.mutate({
         questionId: currentQuestion.id,
         answerText: finalAnswerText.trim(),
@@ -493,6 +530,71 @@ export default function LiveInterviewPage() {
         onToggleWebcam={() => setUseWebcam(!useWebcam)}
         onOpenCompleteModal={() => setShowCompleteModal(true)}
       />
+
+      {/* Interview Progress Bar (from backend interviewState) */}
+      {interviewState && (
+        <div className="border-b border-zinc-800/60 bg-zinc-900/40 px-6 py-2.5">
+          <div className="max-w-7xl mx-auto flex items-center gap-6">
+            {/* Primary Q Progress */}
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <Target className="h-3.5 w-3.5 text-violet-400 shrink-0" />
+              <span className="text-[11px] text-zinc-400 shrink-0 font-medium">
+                {interviewState.primaryQuestionsAsked}
+                <span className="text-zinc-600">/15</span>
+                <span className="text-zinc-600 ml-1">questions</span>
+              </span>
+              <div className="flex-1 h-1 bg-zinc-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${Math.min(100, (interviewState.primaryQuestionsAsked / 15) * 100)}%`,
+                    background: interviewState.primaryQuestionsAsked >= 15
+                      ? 'linear-gradient(90deg, #22c55e, #16a34a)'
+                      : interviewState.primaryQuestionsAsked >= 10
+                        ? 'linear-gradient(90deg, #a78bfa, #7c3aed)'
+                        : 'linear-gradient(90deg, #6366f1, #818cf8)',
+                  }}
+                />
+              </div>
+              {interviewState.canEndEarly && (
+                <span className="text-[10px] font-semibold text-emerald-400 shrink-0 bg-emerald-400/10 px-1.5 py-0.5 rounded-full">
+                  Can End
+                </span>
+              )}
+            </div>
+
+            {/* Difficulty badge */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <TrendingUp className="h-3 w-3 text-zinc-500" />
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                interviewState.currentDifficulty === 'SENIOR' ? 'text-red-300 bg-red-500/10' :
+                interviewState.currentDifficulty === 'MID' ? 'text-amber-300 bg-amber-500/10' :
+                'text-sky-300 bg-sky-500/10'
+              }`}>
+                {interviewState.currentDifficulty}
+              </span>
+            </div>
+
+            {/* Elapsed time */}
+            {interviewState.elapsedMinutes > 0 && (
+              <div className="flex items-center gap-1 shrink-0">
+                <Clock className="h-3 w-3 text-zinc-500" />
+                <span className="text-[11px] text-zinc-500">{interviewState.elapsedMinutes}m</span>
+                {interviewState.elapsedMinutes >= 40 && (
+                  <span className="text-[10px] text-amber-400 font-medium">({45 - interviewState.elapsedMinutes}m left)</span>
+                )}
+              </div>
+            )}
+
+            {/* Follow-up counter for current question */}
+            {interviewState.followUpsAskedCurrentQuestion > 0 && (
+              <div className="shrink-0 text-[10px] text-zinc-500">
+                Follow-ups: {interviewState.followUpsAskedCurrentQuestion}/3
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Error Alert Banner */}
       {errorMsg && (

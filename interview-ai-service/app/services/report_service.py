@@ -11,50 +11,105 @@ class ReportGeneratorService:
         self.is_ready = True
 
     def generate_interview_report(self, request: ReportGenerationRequest) -> ReportGenerationResponse:
-        """Aggregates all mock interview QA pairs and generates a detailed performance report via Gemini API."""
+        from app.llm.prompts import STRUCTURED_REPORT_PROMPT
         
-        # Check if rolling LLM client is ready, else fallback to mock report
         if not langchain_client.is_ready:
-            logger.info("Rolling LLMs not ready. Returning mock evaluation report.")
             return self.get_mock_report(request)
-
-        # Build prompt containing all QA pairs
-        qa_summary_parts = []
-        for idx, ans in enumerate(request.answers):
-            qa_summary_parts.append(
-                f"Question {idx+1}: {ans.questionText}\n"
-                f"Candidate Answer: {ans.answerText}\n"
-                f"Keywords Expected: {', '.join(ans.expectedKeywords) if ans.expectedKeywords else 'None'}\n"
-                f"Score Awarded: {ans.score}/10\n"
-                f"Feedback: {ans.feedback}\n"
+        
+        # 1. Compute competency-level scores from answer data
+        competency_scores = self._compute_competency_scores(request)
+        competency_summary = "\n".join([
+            f"- {name}: avg score {data['avg']:.1f}/10, {data['count']} questions"
+            for name, data in competency_scores.items()
+        ])
+        
+        # 2. Compute overall score
+        all_scores = [a.score for a in request.answers if a.score is not None]
+        overall_score = round(sum(all_scores) / len(all_scores), 2) if all_scores else 0.0
+        
+        # 3. Build QA transcript
+        qa_parts = []
+        for i, ans in enumerate(request.answers):
+            qa_parts.append(
+                f"Q{i+1} [{getattr(ans, 'category', 'TECHNICAL')}]: {ans.questionText}\n"
+                f"Answer: {ans.answerText[:400]}\n"
+                f"Score: {ans.score}/10 | Feedback: {ans.feedback[:200]}"
             )
-        qa_data_text = "\n---\n".join(qa_summary_parts)
-
-        prompt = f"""
-        You are a principal technical hiring manager and career coach. Review the following mock interview transcript containing questions, candidate answers, and individual answer scores:
+        qa_transcript = "\n---\n".join(qa_parts)
         
-        {qa_data_text}
+        # 4. Role alignment
+        resume_skills = set(s.lower() for s in (request.resume_skills or []))
+        jd_skills = set(kw.lower() for ans in request.answers for kw in (ans.expectedKeywords or []))
+        matched_skills = [s for s in resume_skills if any(s in jd.lower() or jd in s for jd in jd_skills)]
+        gap_skills = list(request.resume_skills or [])  # simplified; report prompt will refine
         
-        Generate a comprehensive, high-quality, professional evaluation report for the candidate.
-        Calculate the overall score between 0.0 and 10.0 based on the average or weighted performance across all questions.
-        Identify key technical strengths, areas of improvement (weaknesses), technical concepts that the candidate missed, and outline a step-by-step learning roadmap.
-        """
-
+        prompt = STRUCTURED_REPORT_PROMPT.format(
+            job_title=request.job_title or "Software Engineer",
+            company_name=request.company_name or "the company",
+            interview_type=request.interview_type or "TECHNICAL",
+            difficulty=request.difficulty or "MID",
+            resume_skills=", ".join((request.resume_skills or [])[:20]),
+            qa_transcript=qa_transcript[:6000],
+            competency_summary=competency_summary,
+            overall_score=overall_score
+        )
+        
         try:
-            parsed_response = langchain_client.generate_interview_report(prompt)
+            parsed = langchain_client.generate_interview_report(prompt)
             
-            # Populate consolidated recommendations string for Spring Boot compatibility
-            if not parsed_response.recommendations:
-                roadmap_str = "\n".join([f"- {item}" for item in parsed_response.improvementRoadmap])
-                concepts_str = ", ".join(parsed_response.missingConcepts)
-                parsed_response.recommendations = f"Missing Concepts: {concepts_str}\n\nActionable Roadmap:\n{roadmap_str}"
-                
-            logger.info("Successfully generated final report with overall score: %.2f", parsed_response.overallScore)
-            return parsed_response
-
+            # Ensure overallScore matches computed value (prevent hallucination)
+            parsed.overallScore = overall_score
+            
+            # Backfill competencyBreakdown from computed scores if LLM didn't provide
+            if not parsed.competencyBreakdown:
+                parsed.competencyBreakdown = [
+                    {"name": name, "score": int(data["avg"]*10), "evidence": f"{data['count']} questions evaluated"}
+                    for name, data in competency_scores.items()
+                ]
+            
+            # Backfill readiness if not set correctly
+            if not parsed.readiness or parsed.readinessScore is None:
+                parsed.readiness, parsed.readinessScore = self._compute_readiness(overall_score)
+            
+            # Build recommendations string from roadmap
+            if not parsed.recommendations:
+                roadmap_str = "\n".join([f"- {item}" for item in parsed.improvementRoadmap])
+                concepts_str = ", ".join(parsed.missingConcepts or [])
+                parsed.recommendations = f"Missing Concepts: {concepts_str}\n\nActionable Roadmap:\n{roadmap_str}"
+            
+            logger.info("Generated evidence-based report. Overall: %.2f, Readiness: %s", overall_score, parsed.readiness)
+            return parsed
         except Exception as e:
-            logger.error("Error during Gemini report generation: %s. Falling back to mock report.", str(e))
+            logger.error("Report generation error: %s. Falling back.", str(e))
             return self.get_mock_report(request)
+
+    def _compute_competency_scores(self, request: ReportGenerationRequest) -> dict:
+        """Groups answers by competency/category and computes average scores."""
+        groups = {}
+        for ans in request.answers:
+            cat = getattr(ans, 'category', None) or getattr(ans, 'competency', None) or 'TECHNICAL'
+            if cat not in groups:
+                groups[cat] = {"scores": [], "count": 0}
+            if ans.score is not None:
+                groups[cat]["scores"].append(ans.score)
+                groups[cat]["count"] += 1
+        result = {}
+        for cat, data in groups.items():
+            result[cat] = {
+                "avg": sum(data["scores"]) / len(data["scores"]) if data["scores"] else 0,
+                "count": data["count"]
+            }
+        return result
+
+    def _compute_readiness(self, overall_score: float):
+        """Computes readiness label and score from overall interview score."""
+        readiness_score = int(overall_score * 10)  # 0-10 score -> 0-100
+        if readiness_score >= 75:
+            return "INTERVIEW_READY", readiness_score
+        elif readiness_score >= 50:
+            return "NEEDS_IMPROVEMENT", readiness_score
+        else:
+            return "NOT_READY", readiness_score
 
     def get_mock_report(self, request: ReportGenerationRequest) -> ReportGenerationResponse:
         """Calculates raw overall score average and generates a dynamic evaluation report based on candidate performance."""
@@ -147,6 +202,7 @@ class ReportGeneratorService:
         concepts_str = ", ".join(missing_concepts)
         recommendations = f"Missing Concepts: {concepts_str}\n\nActionable Roadmap:\n{roadmap_str}"
 
+        readiness, readiness_score = self._compute_readiness(overall_score)
         return ReportGenerationResponse(
             overallScore=overall_score,
             summary=summary,
@@ -154,7 +210,12 @@ class ReportGeneratorService:
             weaknesses=weaknesses,
             missingConcepts=missing_concepts,
             improvementRoadmap=roadmap,
-            recommendations=recommendations
+            recommendations=recommendations,
+            readiness=readiness,
+            readinessScore=readiness_score,
+            competencyBreakdown=[],
+            roleAlignment={},
+            nextInterviewPlan=roadmap[:3]
         )
 
 # Singleton instance

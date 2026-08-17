@@ -1,5 +1,5 @@
-from pydantic import BaseModel, Field
-from typing import List
+from pydantic import BaseModel, Field, AliasChoices
+from typing import List, Optional
 
 class AnswerDetail(BaseModel):
     questionText: str = Field(description="The question that was asked")
@@ -7,9 +7,17 @@ class AnswerDetail(BaseModel):
     expectedKeywords: List[str] = Field(default=[], description="Expected keywords or technical terms")
     score: float = Field(description="The evaluated score (0-10) for this answer")
     feedback: str = Field(description="Constructive feedback for this specific answer")
+    category: Optional[str] = Field(default="TECHNICAL")
+    competency: Optional[str] = Field(default=None)
 
 class ReportGenerationRequest(BaseModel):
     answers: List[AnswerDetail] = Field(description="List of all question-answer evaluation details from the session")
+    job_title: Optional[str] = Field(default=None, validation_alias=AliasChoices('jobTitle', 'job_title'))
+    company_name: Optional[str] = Field(default=None, validation_alias=AliasChoices('companyName', 'company_name'))
+    interview_type: Optional[str] = Field(default="TECHNICAL", validation_alias=AliasChoices('interviewType', 'interview_type'))
+    difficulty: Optional[str] = Field(default="MID")
+    resume_skills: Optional[List[str]] = Field(default_factory=list, validation_alias=AliasChoices('resumeSkills', 'resume_skills'))
+    competency_names: Optional[List[str]] = Field(default_factory=list, validation_alias=AliasChoices('competencyNames', 'competency_names'))
 
 class ReportGenerationResponse(BaseModel):
     overallScore: float = Field(
@@ -23,3 +31,8 @@ class ReportGenerationResponse(BaseModel):
     recommendations: str = Field(
         description="A consolidated string version of the roadmap and missed concepts for Spring Boot API gateway mapping"
     )
+    readiness: Optional[str] = Field(default="NEEDS_IMPROVEMENT", description="INTERVIEW_READY | NEEDS_IMPROVEMENT | NOT_READY")
+    readinessScore: Optional[int] = Field(default=50, description="0-100 readiness score")
+    competencyBreakdown: Optional[List[dict]] = Field(default_factory=list, description="Per-competency score breakdown")
+    roleAlignment: Optional[dict] = Field(default_factory=dict, description="Resume skills vs JD gap analysis")
+    nextInterviewPlan: Optional[List[str]] = Field(default_factory=list, description="Personalised improvement plan")

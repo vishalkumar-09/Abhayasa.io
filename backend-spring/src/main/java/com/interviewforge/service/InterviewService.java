@@ -12,6 +12,14 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.interviewforge.dto.InterviewStateSnapshot;
+
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.Map;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -30,6 +38,12 @@ public class InterviewService {
     private final JobDescriptionRepository jobDescriptionRepository;
     private final UserRepository userRepository;
     private final AiServiceClient aiServiceClient;
+
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(InterviewService.class);
+
+    private final ObjectMapper objectMapper = new ObjectMapper()
+            .registerModule(new JavaTimeModule())
+            .disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
 
     private User getAuthenticatedUser() {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
@@ -73,7 +87,10 @@ public class InterviewService {
                         jobDescription.getRawText(),
                         jobDescription.getTitle(),
                         jobDescription.getCompanyName(),
-                        savedInterview.getInterviewType()
+                        savedInterview.getInterviewType(),
+                        List.of(),
+                        null,
+                        "FIRST"
                 );
 
         // 3. Save questions mapped to the interview session
@@ -97,6 +114,27 @@ public class InterviewService {
 
         // 4. Update status to IN_PROGRESS
         savedInterview.setStatus(InterviewStatus.IN_PROGRESS);
+        savedInterview.setInterviewStartTime(LocalDateTime.now());
+        savedInterview.setPrimaryQuestionsAsked(0);
+        savedInterview.setFollowUpsCurrentQuestion(0);
+
+        InterviewStateSnapshot initialState = InterviewStateSnapshot.builder()
+                .primaryQuestionsAsked(0)
+                .followUpsAskedCurrentQuestion(0)
+                .competenciesEvaluated(List.of())
+                .competenciesRequired(List.of("Core Skills", "Technical Concepts", "System Design", "DSA", "Resume Projects"))
+                .interviewStartTime(LocalDateTime.now())
+                .elapsedMinutes(0)
+                .currentDifficulty(savedInterview.getInterviewType() != null ? "MID" : "MID")
+                .rollingAvgScore(0.0)
+                .canEndEarly(false)
+                .mustEnd(false)
+                .build();
+        try {
+            savedInterview.setInterviewState(objectMapper.writeValueAsString(initialState));
+        } catch (Exception e) {
+            logger.warn("Could not serialise initial interview state: {}", e.getMessage());
+        }
 
         return mapToResponse(savedInterview);
     }
@@ -172,8 +210,94 @@ public class InterviewService {
                     .build();
         }
 
+        answer.setTechnicalScore(evaluation.getTechnicalScore());
+        answer.setCommunicationScore(evaluation.getCommunicationScore());
+        answer.setDepthScore(evaluation.getDepthScore());
+        answer.setCompletenessScore(evaluation.getCompletenessScore());
+
         Answer savedAnswer = answerRepository.save(answer);
-        return mapToAnswerResponse(savedAnswer);
+        
+        updateInterviewState(interview, question, evaluation);
+        
+        AnswerResponse resp = mapToAnswerResponse(savedAnswer);
+        resp.setAnswerStrength(evaluation.getAnswerStrength());
+        resp.setMissedConcepts(evaluation.getMissedConcepts());
+        return resp;
+    }
+
+    private void updateInterviewState(Interview interview, Question question, AiServiceClient.AnswerEvaluationResponse evaluation) {
+        try {
+            InterviewStateSnapshot state;
+            if (interview.getInterviewState() != null && !interview.getInterviewState().isBlank()) {
+                state = objectMapper.readValue(interview.getInterviewState(), InterviewStateSnapshot.class);
+            } else {
+                state = InterviewStateSnapshot.builder()
+                        .competenciesEvaluated(new java.util.ArrayList<>())
+                        .competenciesRequired(List.of("Core Skills", "Technical Concepts", "System Design", "DSA", "Resume Projects"))
+                        .interviewStartTime(interview.getInterviewStartTime() != null ? interview.getInterviewStartTime() : LocalDateTime.now())
+                        .currentDifficulty("MID")
+                        .build();
+            }
+
+            boolean isPrimaryQuestion = true;
+
+            if (isPrimaryQuestion) {
+                int newCount = (state.getPrimaryQuestionsAsked() + 1);
+                state = InterviewStateSnapshot.builder()
+                        .primaryQuestionsAsked(newCount)
+                        .followUpsAskedCurrentQuestion(0)
+                        .competenciesEvaluated(state.getCompetenciesEvaluated())
+                        .competenciesRequired(state.getCompetenciesRequired())
+                        .interviewStartTime(state.getInterviewStartTime())
+                        .currentDifficulty(adaptDifficulty(state, evaluation))
+                        .rollingAvgScore(computeRollingAvg(interview, evaluation))
+                        .canEndEarly(newCount >= 10)
+                        .mustEnd(newCount >= 18 || isTimeExpired(state))
+                        .elapsedMinutes(computeElapsed(state))
+                        .build();
+
+                interview.setPrimaryQuestionsAsked(newCount);
+                interview.setFollowUpsCurrentQuestion(0);
+            }
+
+            interview.setInterviewState(objectMapper.writeValueAsString(state));
+            interviewRepository.save(interview);
+        } catch (Exception e) {
+            logger.warn("Could not update interview state: {}", e.getMessage());
+        }
+    }
+
+    private String adaptDifficulty(InterviewStateSnapshot state, AiServiceClient.AnswerEvaluationResponse eval) {
+        double avg = state.getRollingAvgScore();
+        if (eval.getScore() != null && avg > 0) {
+            double updated = (avg * 0.7) + (eval.getScore() * 0.3);
+            if (updated >= 8.0) return "SENIOR";
+            if (updated <= 4.0) return "JUNIOR";
+        }
+        return state.getCurrentDifficulty() != null ? state.getCurrentDifficulty() : "MID";
+    }
+
+    private double computeRollingAvg(Interview interview, AiServiceClient.AnswerEvaluationResponse eval) {
+        List<Question> qs = interview.getQuestions();
+        if (qs == null) return eval.getScore() != null ? eval.getScore() : 0.0;
+        List<Integer> recentScores = qs.stream()
+                .filter(q -> q.getAnswer() != null && q.getAnswer().getEvaluationScore() != null)
+                .map(q -> q.getAnswer().getEvaluationScore())
+                .sorted(java.util.Comparator.reverseOrder())
+                .limit(5)
+                .collect(Collectors.toList());
+        if (recentScores.isEmpty()) return eval.getScore() != null ? eval.getScore() : 0.0;
+        return recentScores.stream().mapToInt(Integer::intValue).average().orElse(0.0);
+    }
+
+    private boolean isTimeExpired(InterviewStateSnapshot state) {
+        if (state.getInterviewStartTime() == null) return false;
+        return Duration.between(state.getInterviewStartTime(), LocalDateTime.now()).toMinutes() >= 45;
+    }
+
+    private long computeElapsed(InterviewStateSnapshot state) {
+        if (state.getInterviewStartTime() == null) return 0;
+        return Duration.between(state.getInterviewStartTime(), LocalDateTime.now()).toMinutes();
     }
 
     @Transactional
@@ -213,11 +337,24 @@ public class InterviewService {
                     .expectedKeywords(q.getExpectedKeywords())
                     .score(score)
                     .feedback(feedback)
+                    .category(q.getCategory())
+                    .competency(q.getCategory())
                     .build();
         }).collect(Collectors.toList());
 
-        // Invoke AI service to generate aggregated report summary
-        AiServiceClient.ReportGenerationResponse aiReport = aiServiceClient.generateReport(answerDetailsList);
+        String jobTitle = interview.getJobDescription() != null ? interview.getJobDescription().getTitle() : null;
+        String companyName = interview.getJobDescription() != null ? interview.getJobDescription().getCompanyName() : null;
+        List<String> resumeSkills = interview.getResume() != null ? interview.getResume().getSkills() : List.of();
+        String difficulty = "MID";
+
+        AiServiceClient.ReportGenerationResponse aiReport = aiServiceClient.generateReport(
+            answerDetailsList,
+            jobTitle,
+            companyName,
+            interview.getInterviewType(),
+            difficulty,
+            resumeSkills
+        );
 
         // Update Interview state
         interview.setStatus(InterviewStatus.COMPLETED);
@@ -231,7 +368,17 @@ public class InterviewService {
                 .strengths(aiReport.getStrengths())
                 .weaknesses(aiReport.getWeaknesses())
                 .recommendations(aiReport.getRecommendations())
+                .readiness(aiReport.getReadiness())
+                .readinessScore(aiReport.getReadinessScore())
                 .build();
+
+        if (aiReport.getCompetencyBreakdown() != null && !aiReport.getCompetencyBreakdown().isEmpty()) {
+            try {
+                report.setCompetencyBreakdown(objectMapper.writeValueAsString(aiReport.getCompetencyBreakdown()));
+            } catch (Exception e) {
+                logger.warn("Could not serialise competency breakdown: {}", e.getMessage());
+            }
+        }
 
         Report savedReport = reportRepository.save(report);
         return mapToReportResponse(savedReport);
@@ -277,6 +424,15 @@ public class InterviewService {
                     .collect(Collectors.toList());
         }
 
+        InterviewStateSnapshot stateSnapshot = null;
+        if (interview.getInterviewState() != null && !interview.getInterviewState().isBlank()) {
+            try {
+                stateSnapshot = objectMapper.readValue(interview.getInterviewState(), InterviewStateSnapshot.class);
+            } catch (Exception e) {
+                logger.warn("Could not parse interview state: {}", e.getMessage());
+            }
+        }
+
         return InterviewResponse.builder()
                 .id(interview.getId())
                 .status(interview.getStatus().name())
@@ -285,6 +441,7 @@ public class InterviewService {
                 .questions(questionDtos)
                 .interviewType(interview.getInterviewType())
                 .createdAt(interview.getCreatedAt())
+                .interviewState(stateSnapshot)
                 .build();
     }
 
@@ -315,6 +472,18 @@ public class InterviewService {
                     .collect(Collectors.toList());
         }
 
+        List<Map<String, Object>> competencyBreakdown = List.of();
+        if (report.getCompetencyBreakdown() != null && !report.getCompetencyBreakdown().isBlank()) {
+            try {
+                competencyBreakdown = objectMapper.readValue(
+                    report.getCompetencyBreakdown(),
+                    new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {}
+                );
+            } catch (Exception e) {
+                logger.warn("Could not deserialise competency breakdown: {}", e.getMessage());
+            }
+        }
+
         return ReportResponse.builder()
                 .id(report.getId())
                 .interviewId(interview != null ? interview.getId() : null)
@@ -327,6 +496,9 @@ public class InterviewService {
                 .recommendations(report.getRecommendations())
                 .questions(questionDtos)
                 .createdAt(report.getCreatedAt())
+                .readiness(report.getReadiness())
+                .readinessScore(report.getReadinessScore())
+                .competencyBreakdown(competencyBreakdown)
                 .build();
     }
 
@@ -352,6 +524,14 @@ public class InterviewService {
         }
         Question question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Question not found with id: " + questionId));
+        
+        if (interview.getFollowUpsCurrentQuestion() != null && interview.getFollowUpsCurrentQuestion() >= 3) {
+            return new FollowUpResponse("Maximum follow-up questions reached for this topic. Please move to the next question.");
+        }
+        interview.setFollowUpsCurrentQuestion(
+            interview.getFollowUpsCurrentQuestion() != null ? interview.getFollowUpsCurrentQuestion() + 1 : 1
+        );
+        interviewRepository.save(interview);
         
         String currentQuestionContext = (request.getHistory() != null && !request.getHistory().isEmpty())
                 ? request.getHistory().get(request.getHistory().size() - 1)

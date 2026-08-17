@@ -247,102 +247,116 @@ Resume Text:
             )
 
     def generate_interview_questions_rag(self, prompt_text: str) -> QuestionGenerationResponse:
-        """Generates interview questions using LangChain rolling models."""
-        raw_output = self.execute_prompt(prompt_text, temperature=0.7)
+        """Generates interview questions using LangChain rolling models with JSON validation."""
+        # Use temperature=0.6 for creative but focused questions
+        # Use max_tokens=4000 to allow full 15-18 question set
+        raw_output = self.execute_prompt(prompt_text, temperature=0.6, max_tokens=4000)
         data = extract_json_payload(raw_output)
         if isinstance(data, list):
             data = {"questions": data}
+        # Validate each question has required fields
+        questions = data.get("questions", [])
+        validated = []
+        for q in questions:
+            if q.get("question_text") and len(q.get("question_text", "")) > 10:
+                validated.append(q)
+        data["questions"] = validated
         return QuestionGenerationResponse(**data)
 
-    def generate_followup_question(self, question_text: str, answer_text: str, history: List[str] = None) -> str:
-        """
-        Generates short follow-up questions using Multi-Provider Rolling Technique.
-        Token-optimized to prevent context window overflow.
-        """
-        safe_question = (question_text or "")[:300]
-        safe_answer = (answer_text or "")[:400]
-
-        if not self.is_ready:
-            from app.services.parser_service import extract_heuristic_skills
-            found = extract_heuristic_skills(safe_answer + " " + safe_question)
-            tech = found[0] if found else "that implementation"
-            return f"What trade-offs or performance considerations did you evaluate when using {tech}?"
-
-        prompt_template = PromptTemplate.from_template(
-            """You are an elite technical interviewer.
-Question Asked: {question_text}
-Candidate Spoken Answer: {answer_text}
-
-Ask ONE sharp follow-up question under 20 words probing directly into the specific technical tools, implementation choices, or concepts the candidate mentioned in their answer.
-Output ONLY the follow-up question text.
-"""
-        )
-        formatted_prompt = prompt_template.format(
+    def generate_followup_question(self, question_text: str, answer_text: str, history: List[str] = None, candidate_state: dict = None) -> str:
+        """Generates adaptive follow-up using candidate state for difficulty adjustment."""
+        from app.llm.prompts import ADAPTIVE_FOLLOWUP_PROMPT
+        safe_question = (question_text or "")[:400]
+        safe_answer = (answer_text or "")[:600]
+        safe_history = "\n".join(history or [])[:300]
+        import json
+        state_json = json.dumps(candidate_state or {"rollingAvgScore": 7.0, "currentDifficulty": "MID"})
+        follow_up_number = len(history) + 1 if history else 1
+        
+        formatted = ADAPTIVE_FOLLOWUP_PROMPT.format(
             question_text=safe_question,
-            answer_text=safe_answer
+            answer_text=safe_answer,
+            history=safe_history,
+            candidate_state=state_json,
+            follow_up_number=follow_up_number
         )
-
         try:
-            res = self.execute_prompt(formatted_prompt, temperature=0.6, max_tokens=40)
+            res = self.execute_prompt(formatted, temperature=0.5, max_tokens=60)
             return res.strip().replace('"', '')
         except Exception as e:
-            logger.error("LangChain follow-up error: %s. Returning fallback follow-up.", str(e))
-            from app.services.parser_service import extract_heuristic_skills
-            found = extract_heuristic_skills(safe_answer + " " + safe_question)
-            tech = found[0] if found else "that implementation"
-            return f"What trade-offs or performance considerations did you evaluate when using {tech}?"
+            logger.error("Follow-up generation error: %s", str(e))
+            return self._fallback_followup(safe_question, safe_answer, candidate_state)
 
-    def evaluate_answer(self, question_text: str, answer_text: str, difficulty: str = "MEDIUM") -> AnswerEvaluationResponse:
-        """Evaluates candidate answer using LangChain ChatPromptTemplate with rolling multi-provider models."""
-        if not self.is_ready:
+    def _fallback_followup(self, question_text: str, answer_text: str, candidate_state: dict = None) -> str:
+        """Local fallback follow-up generation."""
+        from app.services.parser_service import extract_heuristic_skills
+        found = extract_heuristic_skills(answer_text + " " + question_text)
+        tech = found[0] if found else "that implementation"
+        score = (candidate_state or {}).get("rollingAvgScore", 7.0)
+        if score < 5:
+            return f"Can you explain at a basic level what {tech} is and when you would use it?"
+        elif score >= 8:
+            return f"In a system handling 10 million daily requests, what specific {tech} optimizations would you apply?"
+        else:
+            return f"What trade-offs did you consider when choosing {tech} for this use case?"
+
+    def evaluate_answer_with_evidence(self, question_text: str, answer_text: str, expected_keywords: List[str] = None, difficulty: str = "MEDIUM") -> AnswerEvaluationResponse:
+        """Evidence-aware evaluation returning verbatim evidence quotes and missed concepts."""
+        from app.llm.prompts import EVIDENCE_EVALUATOR_PROMPT
+        
+        # Detect blank/very short answers early
+        if not answer_text or len(answer_text.strip()) < 10:
             return AnswerEvaluationResponse(
-                score=8.5,
-                technicalScore=85,
-                communicationScore=80,
-                depthScore=85,
-                completenessScore=90,
-                feedback="Solid response demonstrating good understanding of core concepts."
+                score=0, technicalScore=0, communicationScore=0, depthScore=0, completenessScore=0,
+                feedback="No answer provided.",
+                evidenceQuote=None,
+                missedConcepts=expected_keywords or [],
+                answerStrength="BLANK"
             )
-
-        chat_prompt = ChatPromptTemplate.from_messages([
-            ("system", "You are an expert technical interview evaluator."),
-            ("human", """Question: {question_text}
-Candidate Answer: {answer_text}
-Difficulty: {difficulty}
-
-Evaluate the candidate's answer from 0-100 on technical accuracy, communication depth, completeness, and overall score (0-10).
-Return ONLY a JSON object with:
-{{
-  "score": 8.5,
-  "technicalScore": 85,
-  "communicationScore": 80,
-  "depthScore": 85,
-  "completenessScore": 90,
-  "feedback": "Detailed constructive feedback here."
-}}
-""")
-        ])
-
-        formatted_prompt = chat_prompt.format_prompt(
-            question_text=(question_text or "")[:400],
-            answer_text=(answer_text or "")[:1000],
+        
+        formatted = EVIDENCE_EVALUATOR_PROMPT.format(
+            question_text=(question_text or "")[:500],
+            answer_text=(answer_text or "")[:1200],
+            expected_keywords=", ".join(expected_keywords or []),
             difficulty=difficulty
-        ).to_string()
-
+        )
         try:
-            raw_output = self.execute_prompt(formatted_prompt, temperature=0.3, max_tokens=220)
+            raw_output = self.execute_prompt(formatted, temperature=0.2, max_tokens=350)
             data = extract_json_payload(raw_output)
+            # Clamp scores to 0-100 for sub-scores, 0-10 for overall
+            data["score"] = max(0, min(10, int(data.get("score", 5))))
+            data["technicalScore"] = max(0, min(100, int(data.get("technicalScore", 50))))
+            data["communicationScore"] = max(0, min(100, int(data.get("communicationScore", 50))))
+            data["depthScore"] = max(0, min(100, int(data.get("depthScore", 50))))
+            data["completenessScore"] = max(0, min(100, int(data.get("completenessScore", 50))))
+            # Derive answerStrength if not provided
+            if "answerStrength" not in data:
+                s = data["score"]
+                data["answerStrength"] = "STRONG" if s > 7 else ("PARTIAL" if s >= 4 else "WEAK")
             return AnswerEvaluationResponse(**data)
         except Exception as e:
-            logger.error("LangChain evaluate_answer error: %s", str(e))
-            return AnswerEvaluationResponse(
-                score=8.0,
-                technicalScore=80,
-                communicationScore=80,
-                depthScore=80,
-                completenessScore=80,
-                feedback="Good explanation covering core technical requirements."
-            )
+            logger.error("Evidence evaluation error: %s", str(e))
+            return self._fallback_evaluation(answer_text, expected_keywords or [])
+
+    def _fallback_evaluation(self, answer_text: str, expected_keywords: List[str]) -> AnswerEvaluationResponse:
+        """Local heuristic evaluation fallback."""
+        matched = sum(1 for kw in expected_keywords if kw.lower() in answer_text.lower())
+        total = max(len(expected_keywords), 1)
+        ratio = matched / total
+        score = int(3 + (ratio * 7))
+        strength = "STRONG" if score > 7 else ("PARTIAL" if score >= 4 else "WEAK")
+        missed = [kw for kw in expected_keywords if kw.lower() not in answer_text.lower()]
+        return AnswerEvaluationResponse(
+            score=score, technicalScore=score*10, communicationScore=70, depthScore=score*9, completenessScore=int(ratio*100),
+            feedback=f"Answer covered {matched}/{total} expected concepts. Review: {', '.join(missed[:3])}" if missed else "Good coverage of expected concepts.",
+            evidenceQuote=None,
+            missedConcepts=missed[:5],
+            answerStrength=strength
+        )
+
+    def evaluate_answer(self, question_text: str, answer_text: str, difficulty: str = "MEDIUM") -> AnswerEvaluationResponse:
+        """Alias for evaluate_answer_with_evidence for backward compatibility."""
+        return self.evaluate_answer_with_evidence(question_text, answer_text, [], difficulty)
 
     def generate_hint(self, question_text: str, history: List[Dict[str, str]], user_message: str) -> str:
         """Generates real-time candidate hints using LangChain ChatPromptTemplate."""
@@ -377,9 +391,22 @@ Return ONLY a JSON object with:
             return "Think about the data structures and algorithmic complexity needed for this question."
 
     def generate_interview_report(self, prompt_text: str) -> ReportGenerationResponse:
-        """Generates performance evaluation report using LangChain rolling models."""
-        raw_output = self.execute_prompt(prompt_text, temperature=0.5)
+        """Generates structured report with competency breakdown using LangChain rolling models."""
+        raw_output = self.execute_prompt(prompt_text, temperature=0.4, max_tokens=2000)
         data = extract_json_payload(raw_output)
+        # Ensure all required fields present with defaults
+        data.setdefault("overallScore", 5.0)
+        data.setdefault("summary", "Interview completed.")
+        data.setdefault("strengths", [])
+        data.setdefault("weaknesses", [])
+        data.setdefault("missingConcepts", [])
+        data.setdefault("improvementRoadmap", [])
+        data.setdefault("recommendations", "")
+        data.setdefault("readiness", "NEEDS_IMPROVEMENT")
+        data.setdefault("readinessScore", 50)
+        data.setdefault("competencyBreakdown", [])
+        data.setdefault("roleAlignment", {})
+        data.setdefault("nextInterviewPlan", [])
         return ReportGenerationResponse(**data)
 
     def transcribe_audio_bytes(self, audio_bytes: bytes, mime_type: str = "audio/webm") -> str:
