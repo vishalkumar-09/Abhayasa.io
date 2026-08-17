@@ -339,29 +339,48 @@ Resume Text:
             target_depth=target_depth
         )
         try:
-            res = self.execute_prompt(formatted, temperature=0.7, max_tokens=250)
-            cleaned = strip_thinking_tokens(res).strip()
+            res = self.execute_prompt(formatted, temperature=0.6, max_tokens=300)
             
-            # Filter meta commentary lines
-            meta_keywords = ["rollingavgscore", "instruction", "primary question", "candidate answer", "we need to", "thinking process", "target depth", "follow-up number", "let's think", "first follow"]
-            lines = [line.strip() for line in cleaned.split("\n") if line.strip()]
+            # 1. Primary: Extract structured JSON payload
+            q_text = ""
+            try:
+                payload = extract_json_payload(res)
+                if isinstance(payload, dict) and payload.get("followup_question"):
+                    q_text = str(payload["followup_question"]).strip()
+            except Exception:
+                pass
+
+            # 2. Secondary fallback: sanitize raw text
+            if not q_text:
+                q_text = strip_thinking_tokens(res).strip()
+            
+            # Filter meta commentary lines and prompt leakages
+            meta_keywords = [
+                "rollingavgscore", "instruction", "constraints:", "constraint", "primary question", 
+                "candidate answer", "we need to", "thinking process", "target depth", "follow-up number", 
+                "let's think", "first follow", "end with ?", "under 25 words", "critical rules", "strict json"
+            ]
+            lines = [line.strip() for line in q_text.split("\n") if line.strip()]
             clean_lines = [l for l in lines if not any(k in l.lower() for k in meta_keywords)]
             combined = " ".join(clean_lines).strip()
 
-            # Clean prefixes
-            combined = re.sub(r'^(?:Follow-?up(?:\s*Question)?|Interviewer|Question)\s*:\s*', '', combined, flags=re.IGNORECASE).strip()
+            # Clean prefixes and leading bullet points
+            combined = re.sub(r'^(?:Follow-?up(?:\s*Question)?|Interviewer|Question|Constraints)\s*:\s*', '', combined, flags=re.IGNORECASE).strip()
+            combined = re.sub(r'^[-\*\•\d+\.]\s*', '', combined).strip()
             combined = combined.replace('"', '').replace('`', '').strip()
-            combined = re.sub(r'^\d+\.\s*', '', combined).strip()
 
             # Extract sentence ending with ? if present
             questions_found = re.findall(r'[^.!?\n]+\?', combined)
             if questions_found:
-                q = questions_found[-1].strip()
-                if q and len(q) > 10 and not any(q.lower() == h.lower() for h in (history or [])):
-                    return q
+                # Pick the longest valid question found
+                valid_qs = [q.strip() for q in questions_found if len(q.strip()) > 15 and not any(k in q.lower() for k in meta_keywords)]
+                if valid_qs:
+                    q = max(valid_qs, key=len)
+                    if not any(q.lower() == h.lower() for h in (history or [])):
+                        return q
 
             # Ensure valid question
-            if combined and len(cleaned) > 10 and '<think>' not in combined.lower() and not any(k in combined.lower() for k in meta_keywords) and not any(combined.lower() == h.lower() for h in (history or [])):
+            if combined and len(combined) > 15 and '<think>' not in combined.lower() and not any(k in combined.lower() for k in meta_keywords) and not any(combined.lower() == h.lower() for h in (history or [])):
                 if not combined.endswith('?'):
                     combined += '?'
                 return combined

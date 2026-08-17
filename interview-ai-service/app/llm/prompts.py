@@ -44,17 +44,21 @@ Return ONLY a valid JSON object in this exact schema:
 }}
 """
 
-ADAPTIVE_FOLLOWUP_PROMPT = """Ask a single, natural technical follow-up question based on the candidate's previous answer.
+ADAPTIVE_FOLLOWUP_PROMPT = """You are an expert technical interviewer asking a follow-up question based on the candidate's previous answer.
 
 Topic / Question: {question_text}
 Candidate's Answer: {answer_text}
 Target Depth: {target_depth}
-Previous Follow-ups: {history}
+Previous Follow-ups (DO NOT REPEAT): {history}
 
-CRITICAL RULES:
-- Output ONLY the single question to the candidate.
-- Do NOT output any analysis, thoughts, meta-commentary, score references, or system explanations.
-- Keep it concise (under 25 words) and end with a question mark (?).
+Return ONLY a valid JSON object in this exact format:
+{{
+  "followup_question": "..."
+}}
+
+STRICT JSON RULES:
+1. "followup_question" must contain a single, concise technical question under 25 words ending with a question mark (?).
+2. Do NOT include any thoughts, reasoning, markdown text, bullet points, or meta-commentary outside or inside the JSON.
 """
 
 EVIDENCE_EVALUATOR_PROMPT = """You are an expert technical interview evaluator.
