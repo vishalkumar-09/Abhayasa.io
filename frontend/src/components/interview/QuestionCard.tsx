@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Volume2, VolumeX, Sparkles, Brain, MessageSquare } from "lucide-react";
+import { Volume2, VolumeX, Sparkles, Brain, Bot, Target } from "lucide-react";
 
 interface QuestionCardProps {
   questionNumber: number;
@@ -31,78 +31,91 @@ export const QuestionCard: React.FC<QuestionCardProps> = React.memo(({
   const activeQuestionText = followUpQuestionText || questionText;
 
   return (
-    <div className="glass-card rounded-2xl p-6 border border-zinc-800/80 relative overflow-hidden flex flex-col gap-4">
-      <div className="absolute top-0 right-0 w-[200px] h-[200px] bg-violet-600/5 rounded-full blur-[50px] pointer-events-none" />
-
-      {/* Badges Bar */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-[11px] font-bold text-zinc-300">
-            Q{questionNumber}
-          </span>
-          {followUpCount > 0 && (
-            <span className="px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] font-bold text-amber-400 flex items-center gap-1">
-              <Sparkles className="h-3 w-3" />
-              Follow-Up #{followUpCount}
-            </span>
-          )}
-          {category && (
-            <span className="px-2.5 py-1 rounded-lg bg-zinc-900/60 border border-zinc-800/60 text-[11px] text-zinc-400">
-              {category}
-            </span>
-          )}
+    <div className="rounded-xl border border-slate-800 bg-[#111827] flex flex-col overflow-hidden shadow-sm">
+      {/* AI Interviewer Header (Indigo tinted) */}
+      <div className="bg-indigo-900/20 border-b border-indigo-900/30 px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500/20 text-indigo-400">
+            <Bot className="h-5 w-5" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-indigo-100">AI Interviewer</h3>
+            <div className="flex items-center gap-2 mt-0.5">
+              {difficulty && (
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                  difficulty === 'SENIOR' ? 'text-red-300 bg-red-500/10' :
+                  difficulty === 'MID' ? 'text-amber-300 bg-amber-500/10' :
+                  'text-sky-300 bg-sky-500/10'
+                }`}>
+                  {difficulty}
+                </span>
+              )}
+              {category && (
+                <span className="text-[10px] font-semibold text-slate-400 px-2 py-0.5 rounded-full bg-slate-800/50">
+                  {category}
+                </span>
+              )}
+            </div>
+          </div>
         </div>
 
-        {/* Speak / Speaking Status */}
         <button
           onClick={() => onSpeak(activeQuestionText)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all ${
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
             isAiSpeaking
-              ? "bg-violet-500/20 border-violet-500/40 text-violet-300 animate-pulse"
-              : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-white"
+              ? "bg-indigo-500/20 border-indigo-500/40 text-indigo-300 animate-pulse"
+              : "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white"
           }`}
           title="Replay Audio Question"
         >
           {isAiSpeaking ? (
             <>
-              <Volume2 className="h-3.5 w-3.5 text-violet-400" />
-              <span>AI Speaking...</span>
+              <Volume2 className="h-4 w-4 text-indigo-400" />
+              <span>Speaking...</span>
             </>
           ) : (
             <>
-              <Volume2 className="h-3.5 w-3.5 text-zinc-400" />
+              <Volume2 className="h-4 w-4 text-slate-400" />
               <span>Listen</span>
             </>
           )}
         </button>
       </div>
 
-      {/* Main Question Text */}
-      <div className="flex flex-col gap-2">
-        <h2 className="text-base md:text-lg font-semibold text-white leading-relaxed tracking-tight">
+      <div className="p-6">
+        {/* Follow-up Badge */}
+        {followUpCount > 0 && (
+          <div className="mb-4 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-xs font-bold text-amber-400">
+            <Sparkles className="h-3.5 w-3.5" />
+            Follow-Up Question
+          </div>
+        )}
+
+        {/* Question Text */}
+        <h2 className="text-xl font-semibold text-slate-100 leading-relaxed tracking-tight">
           {activeQuestionText}
         </h2>
-      </div>
 
-      {/* Expected Concepts */}
-      {expectedConcepts && expectedConcepts.length > 0 && (
-        <div className="flex items-center gap-2 pt-2 border-t border-zinc-900">
-          <span className="text-[10px] uppercase font-bold tracking-wider text-zinc-500 flex items-center gap-1">
-            <Brain className="h-3 w-3 text-zinc-400" />
-            Key Focus Areas:
-          </span>
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {expectedConcepts.map((c, idx) => (
-              <span
-                key={idx}
-                className="px-2 py-0.5 rounded-md bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 font-medium"
-              >
-                {c}
-              </span>
-            ))}
+        {/* Expected Concepts */}
+        {expectedConcepts && expectedConcepts.length > 0 && (
+          <div className="mt-6 flex flex-col gap-2 pt-4 border-t border-slate-800">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+              <Target className="h-3.5 w-3.5 text-slate-400" />
+              Expected Keywords
+            </span>
+            <div className="flex items-center gap-2 flex-wrap">
+              {expectedConcepts.map((c, idx) => (
+                <span
+                  key={idx}
+                  className="px-2.5 py-1 rounded-md bg-slate-800 text-[11px] font-medium text-slate-300"
+                >
+                  {c}
+                </span>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 });

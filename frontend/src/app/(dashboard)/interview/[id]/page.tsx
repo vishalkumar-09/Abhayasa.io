@@ -11,7 +11,7 @@ import { QuestionCard } from "@/components/interview/QuestionCard";
 import { AnswerInputArea } from "@/components/interview/AnswerInputArea";
 import { ChatSidebar } from "@/components/interview/ChatSidebar";
 import { ReportGeneratingLoader } from "@/components/interview/ReportGeneratingLoader";
-import { Loader2, MessageSquare, Clock, Target, TrendingUp } from "lucide-react";
+import { Loader2, TrendingUp, CheckCircle, Clock } from "lucide-react";
 
 /** Interview state snapshot returned by the backend after every answer submission. */
 interface InterviewStateSnapshot {
@@ -33,9 +33,9 @@ const MonacoCodeEditor = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="glass-card rounded-2xl border border-zinc-800/80 h-[400px] flex items-center justify-center bg-zinc-950">
-        <div className="flex items-center gap-2 text-xs text-zinc-400">
-          <Loader2 className="h-4 w-4 animate-spin text-violet-400" />
+      <div className="rounded-xl border border-slate-800 h-[400px] flex items-center justify-center bg-[#111827]">
+        <div className="flex items-center gap-2 text-xs text-slate-400">
+          <Loader2 className="h-4 w-4 animate-spin text-indigo-400" />
           <span>Loading Code Sandbox...</span>
         </div>
       </div>
@@ -88,10 +88,13 @@ export default function LiveInterviewPage() {
   const [isCodingMode, setIsCodingMode] = useState(false);
 
   // Chat Assistant States
-  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false); // Unused visually but keeping state
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [isGeneratingHint, setIsGeneratingHint] = useState(false);
+
+  // Right Panel Tabs
+  const [rightTab, setRightTab] = useState<"OVERVIEW" | "HISTORY">("OVERVIEW");
 
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const baseAnswerTextRef = useRef<string>("");
@@ -164,7 +167,7 @@ export default function LiveInterviewPage() {
     if (interview?.interviewState && !interviewState) {
       setInterviewState(interview.interviewState);
     }
-  }, [interview]);
+  }, [interview, interviewState]);
 
   // Auto-complete when backend signals hard stop (18 questions or 45 min)
   useEffect(() => {
@@ -294,7 +297,6 @@ export default function LiveInterviewPage() {
           speakQuestion(text);
         }, 100);
       } else {
-        // Cap reached or no more follow-up — submit answer and advance to next main question
         if (currentQuestion) {
           submitAnswerMutation.mutate({
             questionId: currentQuestion.id,
@@ -451,7 +453,6 @@ export default function LiveInterviewPage() {
       setAnswerText("");
       setCodeContent("");
       setErrorMsg(null);
-      // Update local interview state snapshot from answer response
       if (data?.interviewState) {
         setInterviewState(data.interviewState);
       }
@@ -469,7 +470,6 @@ export default function LiveInterviewPage() {
     },
   });
 
-  // Handle Answer Submission (Triggers adaptive AI follow-up for initial responses)
   const handleSubmitAnswer = () => {
     if (!currentQuestion) return;
     const finalAnswerText = isCodingMode
@@ -478,7 +478,6 @@ export default function LiveInterviewPage() {
 
     if (!finalAnswerText.trim()) return;
 
-    // Trigger adaptive follow-up for the first 2 iterations on this question
     if (followUpCount < 2) {
       generateFollowUpMutation.mutate({
         questionId: currentQuestion.id,
@@ -486,7 +485,6 @@ export default function LiveInterviewPage() {
         history: followUpQuestionsHistory,
       });
     } else {
-      // After follow-ups completed — finalize and advance
       submitAnswerMutation.mutate({
         questionId: currentQuestion.id,
         answerText: finalAnswerText.trim(),
@@ -521,9 +519,9 @@ export default function LiveInterviewPage() {
 
   if (loadingInterview) {
     return (
-      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center gap-3">
-        <Loader2 className="h-8 w-8 text-violet-500 animate-spin" />
-        <span className="text-xs text-zinc-400 font-medium">Initializing AI Interview Simulator...</span>
+      <div className="h-screen bg-[#0a0f1e] flex flex-col items-center justify-center gap-4">
+        <Loader2 className="h-8 w-8 text-indigo-500 animate-spin" />
+        <span className="text-sm text-slate-400 font-medium">Initializing AI Interview Simulator...</span>
       </div>
     );
   }
@@ -540,15 +538,19 @@ export default function LiveInterviewPage() {
     );
   }
 
+  const compEvaluated = interviewState?.competenciesEvaluated || [];
+  const compRequired = interviewState?.competenciesRequired || ["Algorithms", "System Design", "Communication"];
+
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
-      {/* Isolated Memoized Header */}
+    <div className="h-screen bg-[#0a0f1e] text-slate-100 flex flex-col overflow-hidden">
+      {/* Header */}
       <InterviewHeader
         currentIdx={currentIdx}
         totalQuestions={totalQuestions}
         roleTitle={interview?.roleTitle}
         categoryName={interview?.categoryName}
         difficulty={interview?.difficulty}
+        interviewType={interview?.interviewType}
         isMuted={isMuted}
         onToggleMute={() => setIsMuted(!isMuted)}
         useWebcam={useWebcam}
@@ -556,84 +558,30 @@ export default function LiveInterviewPage() {
         onOpenCompleteModal={() => setShowCompleteModal(true)}
       />
 
-      {/* Interview Progress Bar (from backend interviewState) */}
-      {interviewState && (
-        <div className="border-b border-zinc-800/60 bg-zinc-900/40 px-6 py-2.5">
-          <div className="max-w-7xl mx-auto flex items-center gap-6">
-            {/* Primary Q Progress */}
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <Target className="h-3.5 w-3.5 text-violet-400 shrink-0" />
-              <span className="text-[11px] text-zinc-400 shrink-0 font-medium">
-                {interviewState.primaryQuestionsAsked}
-                <span className="text-zinc-600">/10</span>
-                <span className="text-zinc-600 ml-1">questions</span>
-              </span>
-              <div className="flex-1 h-1 bg-zinc-800 rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all duration-500"
-                  style={{
-                    width: `${Math.min(100, (interviewState.primaryQuestionsAsked / 10) * 100)}%`,
-                    background: interviewState.primaryQuestionsAsked >= 10
-                      ? 'linear-gradient(90deg, #22c55e, #16a34a)'
-                      : 'linear-gradient(90deg, #6366f1, #818cf8)',
-                  }}
-                />
-              </div>
-              {interviewState.canEndEarly && (
-                <span className="text-[10px] font-semibold text-emerald-400 shrink-0 bg-emerald-400/10 px-1.5 py-0.5 rounded-full">
-                  Can End
-                </span>
-              )}
+      {/* Main Content Workspace */}
+      <main className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-3 gap-0">
+        
+        {/* Left/Center Column: Question & Input Area */}
+        <div className="lg:col-span-2 flex flex-col h-full overflow-y-auto p-6 space-y-6">
+          
+          {errorMsg && (
+            <div className="bg-red-500/10 border border-red-500/20 px-4 py-3 rounded-xl text-sm text-red-300 flex items-center justify-between">
+              <span>{errorMsg}</span>
+              <button onClick={() => setErrorMsg(null)} className="font-bold hover:text-white">✕</button>
             </div>
+          )}
 
-            {/* Difficulty badge */}
-            <div className="flex items-center gap-1.5 shrink-0">
-              <TrendingUp className="h-3 w-3 text-zinc-500" />
-              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                interviewState.currentDifficulty === 'SENIOR' ? 'text-red-300 bg-red-500/10' :
-                interviewState.currentDifficulty === 'MID' ? 'text-amber-300 bg-amber-500/10' :
-                'text-sky-300 bg-sky-500/10'
-              }`}>
-                {interviewState.currentDifficulty}
-              </span>
-            </div>
-
-            {/* Elapsed time */}
-            {interviewState.elapsedMinutes > 0 && (
-              <div className="flex items-center gap-1 shrink-0">
-                <Clock className="h-3 w-3 text-zinc-500" />
-                <span className="text-[11px] text-zinc-500">{interviewState.elapsedMinutes}m</span>
-                {interviewState.elapsedMinutes >= 40 && (
-                  <span className="text-[10px] text-amber-400 font-medium">({45 - interviewState.elapsedMinutes}m left)</span>
-                )}
-              </div>
-            )}
-
-            {/* Follow-up counter for current question */}
-            {interviewState.followUpsAskedCurrentQuestion > 0 && (
-              <div className="shrink-0 text-[10px] text-zinc-500">
-                Follow-ups: {interviewState.followUpsAskedCurrentQuestion}/3
-              </div>
-            )}
+          <div className="flex-shrink-0 w-48 mb-2">
+            <WebcamOverlay
+              useWebcam={useWebcam}
+              webcamStream={webcamStream}
+              onToggleWebcam={() => setUseWebcam(!useWebcam)}
+            />
           </div>
-        </div>
-      )}
 
-      {/* Error Alert Banner */}
-      {errorMsg && (
-        <div className="bg-red-500/10 border-b border-red-500/20 px-6 py-2.5 text-xs text-red-300 flex items-center justify-between">
-          <span>{errorMsg}</span>
-          <button onClick={() => setErrorMsg(null)} className="font-bold hover:text-white">✕</button>
-        </div>
-      )}
-
-      {/* Main Content Workspace Grid */}
-      <main className="flex-1 p-6 max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column: Question & Input Area */}
-        <div className="lg:col-span-2 flex flex-col gap-6">
           <QuestionCard
             questionNumber={currentIdx + 1}
-            questionText={currentQuestion?.questionText || "Question details loading..."}
+            questionText={currentQuestion?.questionText || "Loading..."}
             category={interview?.categoryName}
             difficulty={interview?.difficulty}
             expectedConcepts={currentQuestion?.expectedConcepts}
@@ -670,48 +618,113 @@ export default function LiveInterviewPage() {
           />
         </div>
 
-        {/* Right Column: Webcam & AI Assistant Controls */}
-        <div className="flex flex-col gap-6">
-          <WebcamOverlay
-            useWebcam={useWebcam}
-            webcamStream={webcamStream}
-            onToggleWebcam={() => setUseWebcam(!useWebcam)}
-          />
+        {/* Right Column: Overview / History */}
+        <div className="lg:col-span-1 border-l border-slate-800 bg-[#0d1525] flex flex-col h-full overflow-hidden">
+          <div className="flex border-b border-slate-800 bg-[#111827]">
+            <button
+              onClick={() => setRightTab("OVERVIEW")}
+              className={`flex-1 py-3 text-sm font-semibold transition-colors ${
+                rightTab === "OVERVIEW"
+                  ? "text-indigo-400 border-b-2 border-indigo-500"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              Overview
+            </button>
+            <button
+              onClick={() => setRightTab("HISTORY")}
+              className={`flex-1 py-3 text-sm font-semibold transition-colors ${
+                rightTab === "HISTORY"
+                  ? "text-indigo-400 border-b-2 border-indigo-500"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              History & Chat
+            </button>
+          </div>
 
-          {/* Quick AI Co-Pilot Drawer Toggle */}
-          <div className="glass-card rounded-2xl p-5 border border-zinc-800/80 flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <MessageSquare className="h-4 w-4 text-violet-400" />
-                <span className="text-xs font-semibold text-white">AI Technical Co-Pilot</span>
+          <div className="flex-1 overflow-y-auto">
+            {rightTab === "OVERVIEW" ? (
+              <div className="p-6 space-y-6">
+                {interviewState && (
+                  <>
+                    <div className="rounded-xl border border-slate-800 bg-[#111827] p-5">
+                      <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">Interview Status</h4>
+                      
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-slate-300">Current Difficulty</span>
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                            interviewState.currentDifficulty === 'SENIOR' ? 'text-red-300 bg-red-500/10' :
+                            interviewState.currentDifficulty === 'MID' ? 'text-amber-300 bg-amber-500/10' :
+                            'text-sky-300 bg-sky-500/10'
+                          }`}>
+                            {interviewState.currentDifficulty}
+                          </span>
+                        </div>
+
+                        {interviewState.rollingAvgScore > 0 && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-slate-300">Current Score</span>
+                            <span className="text-sm font-semibold text-emerald-400">
+                              {interviewState.rollingAvgScore}/100
+                            </span>
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-slate-300">Can End Early?</span>
+                          {interviewState.canEndEarly ? (
+                            <span className="flex items-center gap-1 text-xs font-medium text-emerald-400">
+                              <CheckCircle className="h-3.5 w-3.5" /> Yes
+                            </span>
+                          ) : (
+                            <span className="text-xs text-slate-500">No</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-800 bg-[#111827] p-5">
+                      <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">Competency Progress</h4>
+                      <div className="space-y-3">
+                        {compRequired.map((comp, i) => {
+                          const isEvaluated = compEvaluated.includes(comp);
+                          return (
+                            <div key={i} className="flex items-center justify-between">
+                              <span className={`text-sm ${isEvaluated ? "text-slate-300" : "text-slate-500"}`}>{comp}</span>
+                              {isEvaluated ? (
+                                <CheckCircle className="h-4 w-4 text-emerald-400" />
+                              ) : (
+                                <div className="h-1.5 w-1.5 rounded-full bg-slate-700" />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </>
+                )}
+                {!interviewState && (
+                  <p className="text-sm text-slate-500 text-center py-10">Data will populate after you answer the first question.</p>
+                )}
               </div>
-              <button
-                onClick={() => setIsChatOpen(true)}
-                className="px-3 py-1.5 rounded-xl bg-violet-600/10 hover:bg-violet-600/20 border border-violet-500/30 text-violet-300 text-xs font-semibold transition-all"
-              >
-                Open Chat Assistant
-              </button>
-            </div>
-            <p className="text-[11px] text-zinc-400 leading-relaxed">
-              Stuck on a tricky algorithmic detail? Ask questions or request hint guidelines without penalty.
-            </p>
+            ) : (
+              <ChatSidebar
+                isOpen={true}
+                onClose={() => setRightTab("OVERVIEW")}
+                messages={chatMessages}
+                chatInput={chatInput}
+                setChatInput={setChatInput}
+                onSendMessage={handleSendChatMessage}
+                onAskHint={handleAskHint}
+                isGeneratingHint={isGeneratingHint}
+              />
+            )}
           </div>
         </div>
       </main>
 
-      {/* Floating Chat Sidebar */}
-      <ChatSidebar
-        isOpen={isChatOpen}
-        onClose={() => setIsChatOpen(false)}
-        messages={chatMessages}
-        chatInput={chatInput}
-        setChatInput={setChatInput}
-        onSendMessage={handleSendChatMessage}
-        onAskHint={handleAskHint}
-        isGeneratingHint={isGeneratingHint}
-      />
-
-      {/* Finish Confirmation Modal */}
       <ConfirmModal
         isOpen={showCompleteModal}
         title="Finish Interview Session?"

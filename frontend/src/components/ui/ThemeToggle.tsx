@@ -13,18 +13,19 @@ export const ThemeToggle: React.FC = () => {
       whileHover={{ scale: 1.05 }}
       whileTap={{ scale: 0.95 }}
       onClick={toggleTheme}
-      className="p-2 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+      className="p-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
       title={`Switch to ${theme === "dark" ? "Light" : "Dark"} Mode`}
+      aria-label={`Switch to ${theme === "dark" ? "Light" : "Dark"} Mode`}
     >
       {theme === "dark" ? (
         <>
-          <Sun className="h-4 w-4 text-amber-400 animate-spin-slow" />
-          <span className="text-[11px] font-medium text-zinc-400 hidden sm:inline">Light</span>
+          <Sun className="h-4 w-4 text-amber-400" />
+          <span className="text-xs font-medium text-slate-400 hidden sm:inline">Light</span>
         </>
       ) : (
         <>
-          <Moon className="h-4 w-4 text-violet-500" />
-          <span className="text-[11px] font-medium text-zinc-600 hidden sm:inline">Dark</span>
+          <Moon className="h-4 w-4 text-indigo-500" />
+          <span className="text-xs font-medium text-slate-600 hidden sm:inline">Dark</span>
         </>
       )}
     </motion.button>

@@ -10,8 +10,7 @@ import {
   Loader2,
   CheckCircle,
   AlertCircle,
-  ShieldCheck,
-  Tag
+  FileBox,
 } from "lucide-react";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { motion } from "framer-motion";
@@ -20,7 +19,6 @@ export default function UploadResumePage() {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragActive, setDragActive] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [deleteTargetResume, setDeleteTargetResume] = useState<{ id: number; name: string } | null>(null);
@@ -49,13 +47,12 @@ export default function UploadResumePage() {
     onSuccess: () => {
       setSuccessMsg("Resume uploaded and parsed successfully!");
       queryClient.invalidateQueries({ queryKey: ["resumes"] });
-      setUploadProgress(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
+      setTimeout(() => setSuccessMsg(null), 3000);
     },
     onError: (err: any) => {
       console.error(err);
-      setErrorMsg(err.response?.data?.message || "Failed to upload and parse resume. Please ensure it is a valid PDF/Docx file.");
-      setUploadProgress(null);
+      setErrorMsg(err.response?.data?.message || "Failed to upload and parse resume. Please ensure it is a valid PDF.");
     },
   });
 
@@ -106,179 +103,179 @@ export default function UploadResumePage() {
   };
 
   const validateAndUpload = (file: File) => {
-    const validTypes = ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"];
-    if (!validTypes.includes(file.type)) {
-      setErrorMsg("Invalid file type. Please upload a PDF, Docx, or txt file.");
+    if (file.type !== "application/pdf") {
+      setErrorMsg("Invalid file type. Please upload a PDF file.");
       return;
     }
-    // Limit file size to 10MB
-    if (file.size > 10 * 1024 * 1024) {
-      setErrorMsg("File size exceeds the 10MB limit.");
+    // Limit file size to 5MB
+    if (file.size > 5 * 1024 * 1024) {
+      setErrorMsg("File size exceeds the 5MB limit.");
       return;
     }
 
-    setUploadProgress(20);
     uploadMutation.mutate(file);
   };
 
   return (
-    <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="flex flex-col gap-8">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-8 max-w-5xl mx-auto">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight text-[var(--foreground)]">Manage Resumes</h2>
-        <p className="text-sm text-zinc-400 mt-1">
-          Upload your resume files. Our Gemini AI parses them to build context for your mock interview sessions.
+        <h1 className="text-3xl font-bold tracking-tight text-slate-50">Resume Management</h1>
+        <p className="text-sm text-slate-400 mt-2">
+          Upload your resume to personalize your mock interview sessions with our AI.
         </p>
       </div>
 
-      {/* Upload zone & Alert messages */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-1 flex flex-col gap-4">
-          <h3 className="text-sm font-semibold text-zinc-300">Upload New Resume</h3>
-          
-          {errorMsg && (
-            <div className="flex items-center gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs animate-in fade-in duration-200">
-              <AlertCircle className="h-5 w-5 shrink-0" />
-              <p className="flex-1">{errorMsg}</p>
-            </div>
-          )}
-
-          {successMsg && (
-            <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs animate-in fade-in duration-200">
-              <CheckCircle className="h-5 w-5 shrink-0" />
-              <p className="flex-1">{successMsg}</p>
-            </div>
-          )}
-
-          {/* Drag & Drop Card */}
-          <div
-            onDragEnter={handleDrag}
-            onDragOver={handleDrag}
-            onDragLeave={handleDrag}
-            onDrop={handleDrop}
-            className={`glass-card rounded-2xl p-8 border-2 border-dashed flex flex-col items-center justify-center text-center cursor-pointer min-h-[280px] transition-all relative ${
-              dragActive
-                ? "border-violet-500 bg-violet-600/5 scale-[1.01]"
-                : uploadMutation.isPending
-                ? "border-zinc-800 bg-zinc-950/20 opacity-80 cursor-wait"
-                : "border-zinc-800 hover:border-zinc-700 bg-zinc-950/40"
-            }`}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              onChange={handleFileChange}
-              accept=".pdf,.docx,.txt"
-              className="hidden"
-              disabled={uploadMutation.isPending}
-            />
-
-            {uploadMutation.isPending ? (
-              <div className="flex flex-col items-center gap-4">
-                <Loader2 className="h-10 w-10 text-violet-500 animate-spin" />
-                <div>
-                  <h4 className="font-semibold text-white">Parsing with Gemini...</h4>
-                  <p className="text-xs text-zinc-500 mt-1">This will take about 5-15 seconds.</p>
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-4">
-                <div className="p-4 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-400 group-hover:text-white transition-colors">
-                  <UploadCloud className="h-8 w-8" />
-                </div>
-                <div>
-                  <h4 className="font-semibold text-white">Click or drag file to upload</h4>
-                  <p className="text-xs text-zinc-500 mt-1 leading-normal max-w-[200px] mx-auto">
-                    Supports PDF, DOCX or TXT files up to 10MB
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
+      {errorMsg && (
+        <div className="flex items-center gap-3 p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+          <AlertCircle className="h-5 w-5 shrink-0" />
+          <p className="flex-1">{errorMsg}</p>
         </div>
+      )}
 
-        {/* Resumes List */}
-        <div className="lg:col-span-2 flex flex-col gap-4">
-          <h3 className="text-sm font-semibold text-zinc-300">Parsed Resumes ({resumes.length})</h3>
+      {successMsg && (
+        <div className="flex items-center gap-3 p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm">
+          <CheckCircle className="h-5 w-5 shrink-0" />
+          <p className="flex-1">{successMsg}</p>
+        </div>
+      )}
 
-          {loadingResumes ? (
-            <div className="glass-card rounded-xl p-12 border border-zinc-800/80 flex flex-col items-center justify-center gap-3">
-              <Loader2 className="h-8 w-8 text-violet-500 animate-spin" />
-              <p className="text-sm text-zinc-500">Retrieving resumes...</p>
+      {/* Upload Zone */}
+      <div
+        onDragEnter={handleDrag}
+        onDragOver={handleDrag}
+        onDragLeave={handleDrag}
+        onDrop={handleDrop}
+        className={`bg-[#111827] border-2 border-dashed rounded-xl p-10 flex flex-col items-center justify-center text-center cursor-pointer transition-all ${
+          dragActive
+            ? "border-indigo-500 bg-indigo-500/5"
+            : uploadMutation.isPending
+            ? "border-slate-800 opacity-75 cursor-not-allowed"
+            : "border-slate-700 hover:border-indigo-500/50 hover:bg-slate-800/30"
+        }`}
+        onClick={() => !uploadMutation.isPending && fileInputRef.current?.click()}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          onChange={handleFileChange}
+          accept=".pdf"
+          className="hidden"
+          disabled={uploadMutation.isPending}
+        />
+
+        {uploadMutation.isPending ? (
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="h-10 w-10 text-indigo-500 animate-spin" />
+            <div>
+              <h4 className="font-semibold text-slate-200 text-sm">Uploading and Parsing...</h4>
+              <p className="text-xs text-slate-500 mt-1">Please wait while we extract your skills.</p>
             </div>
-          ) : resumes.length === 0 ? (
-            <div className="glass-card rounded-2xl p-12 border border-zinc-800/80 text-center flex flex-col items-center justify-center gap-3">
-              <div className="p-4 rounded-full bg-zinc-900 border border-zinc-850 text-zinc-600">
-                <FileText className="h-8 w-8" />
-              </div>
-              <h4 className="font-semibold text-zinc-400">No resumes uploaded yet</h4>
-              <p className="text-xs text-zinc-500 max-w-sm">
-                Add your resume above to enable AI-tailored question generation based on your actual skills and experiences.
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center text-slate-400">
+              <UploadCloud className="h-8 w-8" />
+            </div>
+            <div>
+              <h4 className="font-semibold text-slate-200 text-sm">Drop your PDF resume here, or click to browse</h4>
+              <p className="text-xs text-slate-500 mt-1">
+                Max 5MB • PDF format only
               </p>
             </div>
-          ) : (
-            <div className="flex flex-col gap-4">
-              {resumes.map((resume: any) => (
-                <div
-                  key={resume.id}
-                  className="glass-card rounded-2xl p-5 border border-zinc-800/80 hover:border-zinc-700/60 transition-all flex flex-col gap-4"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-center gap-3.5">
-                      <div className="p-3 rounded-xl bg-violet-600/10 border border-violet-500/20 text-violet-400">
-                        <FileText className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <h4 className="font-semibold text-sm text-white truncate max-w-xs sm:max-w-md">
-                          {resume.fileName}
-                        </h4>
-                        <p className="text-xs text-zinc-500 mt-1">
-                          Uploaded on {new Date(resume.createdAt).toLocaleDateString(undefined, {
-                            month: "long",
-                            day: "numeric",
-                            year: "numeric"
-                          })}
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteTargetResume({ id: resume.id, name: resume.fileName });
-                      }}
-                      disabled={deleteMutation.isPending}
-                      className="p-2 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-500/5 border border-transparent hover:border-red-500/10 transition-colors disabled:opacity-50 cursor-pointer"
-                    >
-                      <Trash2 className="h-4.5 w-4.5" />
-                    </button>
-                  </div>
-
-                  {/* Skills tags parsed */}
-                  {resume.skills && resume.skills.length > 0 && (
-                    <div className="flex flex-col gap-2 border-t border-zinc-900 pt-3">
-                      <div className="flex items-center gap-1.5 text-xs text-zinc-400 font-medium">
-                        <Tag className="h-3 w-3 text-zinc-500" />
-                        Skills Extracted:
-                      </div>
-                      <div className="flex flex-wrap gap-1.5 mt-1">
-                        {resume.skills.map((skill: string, index: number) => (
-                          <span
-                            key={index}
-                            className="px-2 py-0.5 rounded-lg bg-zinc-900 border border-zinc-800 text-[10px] font-medium text-zinc-300"
-                          >
-                            {skill}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
-      {/* Delete Confirmation Modal */}
+
+      {/* Resumes List */}
+      <div>
+        <h3 className="text-xl font-semibold text-slate-100 mb-4">Your Resumes</h3>
+        
+        {loadingResumes ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {[1, 2].map((i) => (
+              <div key={i} className="bg-[#111827] rounded-xl border border-slate-800 p-5 flex flex-col gap-4 animate-pulse">
+                <div className="flex gap-4">
+                  <div className="w-10 h-10 bg-slate-800 rounded"></div>
+                  <div className="space-y-2 flex-1">
+                    <div className="h-4 w-3/4 bg-slate-800 rounded"></div>
+                    <div className="h-3 w-1/2 bg-slate-800 rounded"></div>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <div className="h-6 w-16 bg-slate-800 rounded-full"></div>
+                  <div className="h-6 w-16 bg-slate-800 rounded-full"></div>
+                  <div className="h-6 w-16 bg-slate-800 rounded-full"></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : resumes.length === 0 ? (
+          <div className="bg-[#111827] rounded-xl border border-slate-800 p-12 text-center flex flex-col items-center justify-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center text-slate-500">
+              <FileBox className="h-8 w-8" />
+            </div>
+            <div>
+              <h4 className="text-base font-semibold text-slate-200">No resumes uploaded yet</h4>
+              <p className="text-sm text-slate-400 mt-1">Upload your first resume above to get started.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {resumes.map((resume: any) => (
+              <div
+                key={resume.id}
+                className="bg-[#111827] rounded-xl border border-slate-800 p-5 flex flex-col gap-4"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded bg-red-500/10 flex items-center justify-center shrink-0">
+                      <FileText className="h-5 w-5 text-red-500" />
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="font-semibold text-sm text-slate-200 truncate" title={resume.fileName}>
+                        {resume.fileName}
+                      </h4>
+                      <p className="text-xs text-slate-500 mt-1">
+                        {new Date(resume.createdAt).toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric"
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setDeleteTargetResume({ id: resume.id, name: resume.fileName })}
+                    className="p-2 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors shrink-0"
+                    title="Delete Resume"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+
+                {resume.skills && resume.skills.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {resume.skills.slice(0, 6).map((skill: string, index: number) => (
+                      <span
+                        key={index}
+                        className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-slate-800 text-slate-300"
+                      >
+                        {skill}
+                      </span>
+                    ))}
+                    {resume.skills.length > 6 && (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-slate-800 text-slate-400">
+                        +{resume.skills.length - 6} more
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <ConfirmModal
         isOpen={deleteTargetResume !== null}
         onClose={() => setDeleteTargetResume(null)}
@@ -289,8 +286,8 @@ export default function UploadResumePage() {
           }
         }}
         title={`Delete "${deleteTargetResume?.name}"?`}
-        description="Are you sure you want to delete this resume? It will be removed from your profile and will no longer be used for AI question tailoring."
-        confirmText="Delete Resume"
+        description="Are you sure you want to delete this resume? It will be removed from your profile."
+        confirmText="Delete"
         cancelText="Cancel"
         variant="danger"
         isLoading={deleteMutation.isPending}

@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
@@ -13,18 +13,26 @@ import {
   Award,
   Clock,
   ArrowRight,
-  Plus,
-  ChevronRight,
   Loader2,
   Calendar,
-  AlertCircle,
-  Trash2
+  Trash2,
+  CheckCircle2,
+  ListChecks,
+  Check
 } from "lucide-react";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 
 export default function DashboardPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const [greeting, setGreeting] = useState("Good morning");
+
+  useEffect(() => {
+    const hour = new Date().getHours();
+    if (hour >= 18) setGreeting("Good evening");
+    else if (hour >= 12) setGreeting("Good afternoon");
+    else setGreeting("Good morning");
+  }, []);
 
   const deleteInterviewMutation = useMutation({
     mutationFn: async (id: number) => {
@@ -73,21 +81,15 @@ export default function DashboardPage() {
     },
   });
 
-  const isLoading = loadingResumes || loadingJobs || loadingInterviews;
-
   const activeInterviews = interviews.filter(
     (i: any) => i.status === "IN_PROGRESS" || i.status === "CREATED"
   );
-  const completedInterviews = interviews.filter(
-    (i: any) => i.status === "COMPLETED"
-  );
+
+  const recentInterviews = interviews.slice(0, 5);
 
   const containerVariants = {
     hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: { staggerChildren: 0.1 },
-    },
+    visible: { opacity: 1, transition: { staggerChildren: 0.1 } },
   };
 
   const itemVariants = {
@@ -99,42 +101,36 @@ export default function DashboardPage() {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="flex flex-col gap-8"
+      className="flex flex-col gap-6 lg:gap-8"
     >
       {/* Welcome Banner */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="glass-card rounded-2xl p-6 md:p-8 border border-[var(--border)] relative overflow-hidden bg-gradient-to-r from-violet-950/20 via-zinc-950 to-zinc-950"
+        className="bg-gradient-to-r from-indigo-950/30 to-[#111827] rounded-xl p-6 md:p-8 border border-slate-800"
       >
-        <div className="absolute top-0 right-0 w-96 h-96 bg-violet-600/10 rounded-full blur-3xl pointer-events-none" />
-        
-        <div className="relative z-10 max-w-2xl">
-          <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-[var(--foreground)]">
-            Welcome back, <span className="bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent">{user?.name}</span>!
+        <div className="max-w-2xl">
+          <h2 className="text-3xl font-bold tracking-tight text-slate-50">
+            {greeting}, {user?.name}
           </h2>
-          <p className="text-zinc-400 mt-2 text-sm md:text-base leading-relaxed">
-            Ready to sharpen your interview performance? Upload your resume, add target job descriptions, and let our AI simulator evaluate your readiness for top-tier tech roles.
+          <p className="text-slate-400 mt-2 text-base">
+            Ready to sharpen your interview performance?
           </p>
           <div className="mt-6 flex flex-wrap gap-4">
-            <motion.div whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}>
-              <Link
-                href="/interview"
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-medium text-sm transition-all shadow-lg shadow-violet-600/20 cursor-pointer"
-              >
-                <Play className="h-4 w-4 fill-current" />
-                New Mock Interview
-              </Link>
-            </motion.div>
-            <motion.div whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}>
-              <Link
-                href="/upload-resume"
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white font-medium text-sm transition-all cursor-pointer"
-              >
-                <FileText className="h-4 w-4" />
-                Manage Resumes
-              </Link>
-            </motion.div>
+            <Link
+              href="/interview"
+              className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm px-4 py-2.5 rounded-lg transition-colors inline-flex items-center gap-2"
+            >
+              <Play className="h-4 w-4" />
+              Start Interview
+            </Link>
+            <Link
+              href="/upload-resume"
+              className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-sm px-4 py-2.5 rounded-lg transition-colors inline-flex items-center gap-2"
+            >
+              <FileText className="h-4 w-4" />
+              Manage Resumes
+            </Link>
           </div>
         </div>
       </motion.div>
@@ -146,269 +142,210 @@ export default function DashboardPage() {
         animate="visible"
         className="grid grid-cols-2 lg:grid-cols-4 gap-4"
       >
-        <motion.div variants={itemVariants} whileHover={{ y: -3 }} className="glass-card rounded-xl p-5 border border-[var(--border)] flex items-center justify-between shadow-sm">
+        <motion.div variants={itemVariants} className="bg-[#111827] rounded-xl p-5 border border-slate-800 flex items-center justify-between">
           <div>
-            <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Interviews</p>
-            <h3 className="text-2xl font-bold mt-1 text-[var(--foreground)]">{interviews.length}</h3>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Interviews</p>
+            <h3 className="text-3xl font-bold mt-2 text-slate-100">{interviews.length}</h3>
           </div>
-          <div className="p-3 rounded-lg bg-violet-500/10 border border-violet-500/10">
-            <Award className="h-5 w-5 text-violet-400" />
+          <div className="w-12 h-12 rounded-lg bg-indigo-500/10 flex items-center justify-center">
+            <ListChecks className="h-6 w-6 text-indigo-400" />
           </div>
         </motion.div>
 
-        <motion.div variants={itemVariants} whileHover={{ y: -3 }} className="glass-card rounded-xl p-5 border border-[var(--border)] flex items-center justify-between shadow-sm">
+        <motion.div variants={itemVariants} className="bg-[#111827] rounded-xl p-5 border border-slate-800 flex items-center justify-between">
           <div>
-            <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Active Sessions</p>
-            <h3 className="text-2xl font-bold mt-1 text-[var(--foreground)]">{activeInterviews.length}</h3>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Active Sessions</p>
+            <h3 className="text-3xl font-bold mt-2 text-slate-100">{activeInterviews.length}</h3>
           </div>
-          <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/10">
-            <Clock className="h-5 w-5 text-yellow-400 animate-pulse" />
+          <div className="w-12 h-12 rounded-lg bg-amber-500/10 flex items-center justify-center">
+            <Clock className="h-6 w-6 text-amber-400" />
           </div>
         </motion.div>
 
-        <motion.div variants={itemVariants} whileHover={{ y: -3 }} className="glass-card rounded-xl p-5 border border-[var(--border)] flex items-center justify-between shadow-sm">
+        <motion.div variants={itemVariants} className="bg-[#111827] rounded-xl p-5 border border-slate-800 flex items-center justify-between">
           <div>
-            <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Resumes</p>
-            <h3 className="text-2xl font-bold mt-1 text-[var(--foreground)]">{resumes.length}</h3>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Resumes</p>
+            <h3 className="text-3xl font-bold mt-2 text-slate-100">{resumes.length}</h3>
           </div>
-          <div className="p-3 rounded-lg bg-sky-500/10 border border-sky-500/10">
-            <FileText className="h-5 w-5 text-sky-400" />
+          <div className="w-12 h-12 rounded-lg bg-sky-500/10 flex items-center justify-center">
+            <FileText className="h-6 w-6 text-sky-400" />
           </div>
         </motion.div>
 
-        <motion.div variants={itemVariants} whileHover={{ y: -3 }} className="glass-card rounded-xl p-5 border border-[var(--border)] flex items-center justify-between shadow-sm">
+        <motion.div variants={itemVariants} className="bg-[#111827] rounded-xl p-5 border border-slate-800 flex items-center justify-between">
           <div>
-            <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Jobs Configured</p>
-            <h3 className="text-2xl font-bold mt-1 text-[var(--foreground)]">{jobs.length}</h3>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Jobs Configured</p>
+            <h3 className="text-3xl font-bold mt-2 text-slate-100">{jobs.length}</h3>
           </div>
-          <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/10">
-            <Briefcase className="h-5 w-5 text-emerald-400" />
+          <div className="w-12 h-12 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+            <Briefcase className="h-6 w-6 text-emerald-400" />
           </div>
         </motion.div>
       </motion.div>
 
-      {/* Main Grid: Left = Recent Interviews, Right = Setup steps */}
+      {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Recent Interviews List */}
+        {/* Left Column: Recent Interviews */}
         <div className="lg:col-span-2 flex flex-col gap-4">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-semibold text-[var(--foreground)]">Recent Mock Interviews</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-semibold text-slate-100">Recent Interviews</h3>
             {interviews.length > 0 && (
-              <Link href="/interview" className="text-xs font-medium text-violet-400 hover:text-violet-300 flex items-center gap-1">
+              <Link href="/interviews" className="text-sm text-indigo-400 hover:text-indigo-300">
                 View All
-                <ChevronRight className="h-3 w-3" />
               </Link>
             )}
           </div>
 
-          {isLoading ? (
-            <div className="glass-card rounded-xl p-12 border border-[var(--border)] flex flex-col items-center justify-center gap-3">
-              <Loader2 className="h-8 w-8 text-violet-500 animate-spin" />
-              <p className="text-sm text-zinc-500">Loading your history...</p>
-            </div>
-          ) : interviews.length === 0 ? (
-            <div className="glass-card rounded-xl p-10 border border-[var(--border)] text-center flex flex-col items-center justify-center gap-4">
-              <div className="p-4 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-500">
-                <Play className="h-8 w-8 text-zinc-600" />
+          <div className="bg-[#111827] rounded-xl border border-slate-800 overflow-hidden flex flex-col">
+            {loadingInterviews ? (
+              <div className="p-4 space-y-4">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="flex items-center justify-between gap-4 animate-pulse">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 bg-slate-800 rounded-lg"></div>
+                      <div className="space-y-2">
+                        <div className="h-4 w-32 bg-slate-800 rounded"></div>
+                        <div className="h-3 w-20 bg-slate-800 rounded"></div>
+                      </div>
+                    </div>
+                    <div className="h-8 w-24 bg-slate-800 rounded"></div>
+                  </div>
+                ))}
               </div>
-              <div>
-                <h4 className="font-semibold text-[var(--foreground)]">No interviews recorded</h4>
-                <p className="text-sm text-zinc-400 mt-1 max-w-sm mx-auto">
-                  You haven&apos;t started any mock sessions yet. Complete your profile setup on the right to start.
-                </p>
+            ) : recentInterviews.length === 0 ? (
+              <div className="p-12 flex flex-col items-center justify-center text-center gap-4">
+                <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center">
+                  <Play className="h-8 w-8 text-slate-500" />
+                </div>
+                <div>
+                  <h4 className="text-base font-semibold text-slate-200">No interviews recorded</h4>
+                  <p className="text-sm text-slate-400 mt-1 max-w-sm">
+                    You haven&apos;t started any mock sessions yet. Complete your profile setup to start.
+                  </p>
+                </div>
+                <Link
+                  href="/interview"
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm px-4 py-2.5 rounded-lg transition-colors inline-flex items-center gap-2 mt-2"
+                >
+                  Start Interview
+                </Link>
               </div>
-              <Link
-                href="/interview"
-                className="mt-2 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-medium text-xs shadow-md"
-              >
-                Start First Interview
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3">
-              {interviews.map((item: any) => {
-                const isDone = item.status === "COMPLETED";
-                const isDraft = item.status === "IN_PROGRESS" || item.status === "CREATED";
-
-                return (
-                  <motion.div
-                    key={item.id}
-                    whileHover={{ y: -2, scale: 1.01 }}
-                    className="glass-card rounded-xl p-4 border border-[var(--border)] hover:border-zinc-700/60 transition-all flex items-center justify-between gap-4"
-                  >
-                    <div className="flex items-center gap-3.5 min-w-0">
-                      <div
-                        className={`p-2.5 rounded-xl border shrink-0 ${
-                          isDone
-                            ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                            : "bg-amber-500/10 border-amber-500/20 text-amber-400"
-                        }`}
-                      >
+            ) : (
+              <div className="divide-y divide-slate-800">
+                {recentInterviews.map((item: any) => {
+                  const isDone = item.status === "COMPLETED";
+                  return (
+                    <div key={item.id} className="p-4 flex items-center justify-between hover:bg-slate-800/20 transition-colors">
+                      <div className="flex items-center gap-4 min-w-0">
+                        <div className={`shrink-0 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${item.interviewType === 'TECHNICAL' ? 'bg-indigo-500/10 text-indigo-400' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                          {item.interviewType === 'TECHNICAL' ? 'Tech' : 'HR'}
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="font-semibold text-sm text-slate-200 truncate flex items-center gap-2">
+                            Interview #{item.id}
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider ${isDone ? "bg-emerald-500/10 text-emerald-400" : "bg-amber-500/10 text-amber-400"}`}>
+                              {item.status}
+                            </span>
+                          </h4>
+                          <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            {new Date(item.createdAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-3">
                         {isDone ? (
-                          <Award className="h-5 w-5" />
+                          <Link
+                            href={`/report/${item.id}`}
+                            className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-sm px-3 py-1.5 rounded-lg transition-colors"
+                          >
+                            View Report
+                          </Link>
                         ) : (
-                          <Clock className="h-5 w-5 animate-pulse" />
+                          <Link
+                            href={`/interview/${item.id}`}
+                            className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"
+                          >
+                            Continue
+                          </Link>
                         )}
                       </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-semibold text-sm text-[var(--foreground)] truncate">
-                            {item.interviewType} Interview #{item.id}
-                          </h4>
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
-                              isDone
-                                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                                : "bg-amber-500/10 border-amber-500/20 text-amber-400"
-                            }`}
-                          >
-                            {item.status}
-                          </span>
-                        </div>
-                        <p className="text-xs text-zinc-500 mt-1 flex items-center gap-2">
-                          <Calendar className="h-3 w-3" />
-                          {new Date(item.createdAt).toLocaleDateString(undefined, {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
-                          })}
-                        </p>
-                      </div>
                     </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      {isDone ? (
-                        <Link
-                          href={`/report/${item.id}`}
-                          className="px-3.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-semibold text-zinc-200 hover:text-white transition-colors"
-                        >
-                          View Report
-                        </Link>
-                      ) : (
-                        <Link
-                          href={`/interview/${item.id}`}
-                          className="px-3.5 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-xs font-semibold text-white transition-colors flex items-center gap-1 shadow-sm"
-                        >
-                          Continue
-                          <ArrowRight className="h-3 w-3" />
-                        </Link>
-                      )}
-
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteInterview(item.id);
-                        }}
-                        disabled={deleteInterviewMutation.isPending}
-                        className="p-1.5 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-500/5 border border-transparent hover:border-red-500/10 transition-colors cursor-pointer"
-                        title="Delete Session Record"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </div>
-          )}
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Right Column: Setup Progress */}
         <div className="flex flex-col gap-4">
-          <h3 className="text-lg font-semibold text-[var(--foreground)]">Preparation Readiness</h3>
+          <h3 className="text-xl font-semibold text-slate-100">Get Started</h3>
 
-          <div className="glass-card rounded-xl p-5 border border-[var(--border)] flex flex-col gap-5">
-            {/* Step 1: Upload Resume */}
-            <div className="flex items-start gap-3.5">
-              <div
-                className={`p-2 rounded-lg border shrink-0 mt-0.5 ${
-                  resumes.length > 0
-                    ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                    : "bg-zinc-900 border-zinc-800 text-zinc-500"
-                }`}
-              >
-                <FileText className="h-4 w-4" />
+          <div className="bg-[#111827] rounded-xl border border-slate-800 p-5 flex flex-col gap-6">
+            {/* Step 1 */}
+            <div className="flex gap-4">
+              <div className="shrink-0 pt-1">
+                {resumes.length > 0 ? (
+                  <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                    <Check className="h-4 w-4 text-emerald-400" />
+                  </div>
+                ) : (
+                  <div className="w-6 h-6 rounded-full border border-slate-700 flex items-center justify-center">
+                    <span className="text-xs text-slate-500">1</span>
+                  </div>
+                )}
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex justify-between items-center">
-                  <h5 className="text-sm font-semibold text-[var(--foreground)]">1. Upload Resume</h5>
-                  {resumes.length > 0 && (
-                    <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                      Ready
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-zinc-400 mt-1">
-                  {resumes.length > 0
-                    ? `${resumes.length} resume(s) uploaded.`
-                    : "Add your resume to enable personalized AI questions."}
-                </p>
-                <Link
-                  href="/upload-resume"
-                  className="mt-2.5 inline-flex items-center gap-1 text-xs font-semibold text-violet-400 hover:text-violet-300"
-                >
-                  {resumes.length > 0 ? "Manage Resumes" : "Upload Resume Now"}
+              <div>
+                <h4 className="text-sm font-semibold text-slate-200">Upload Resume</h4>
+                <p className="text-xs text-slate-400 mt-1 mb-2">Upload your PDF resume to personalize questions.</p>
+                <Link href="/upload-resume" className="text-xs text-indigo-400 hover:text-indigo-300 font-medium inline-flex items-center gap-1">
+                  {resumes.length > 0 ? "Manage Resumes" : "Upload Resume"}
                   <ArrowRight className="h-3 w-3" />
                 </Link>
               </div>
             </div>
 
-            <div className="border-t border-zinc-900" />
+            <div className="border-t border-slate-800"></div>
 
-            {/* Step 2: Configure Job Description */}
-            <div className="flex items-start gap-3.5">
-              <div
-                className={`p-2 rounded-lg border shrink-0 mt-0.5 ${
-                  jobs.length > 0
-                    ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                    : "bg-zinc-900 border-zinc-800 text-zinc-500"
-                }`}
-              >
-                <Briefcase className="h-4 w-4" />
+            {/* Step 2 */}
+            <div className="flex gap-4">
+              <div className="shrink-0 pt-1">
+                {jobs.length > 0 ? (
+                  <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                    <Check className="h-4 w-4 text-emerald-400" />
+                  </div>
+                ) : (
+                  <div className="w-6 h-6 rounded-full border border-slate-700 flex items-center justify-center">
+                    <span className="text-xs text-slate-500">2</span>
+                  </div>
+                )}
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex justify-between items-center">
-                  <h5 className="text-sm font-semibold text-[var(--foreground)]">2. Target Role Details</h5>
-                  {jobs.length > 0 && (
-                    <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                      Ready
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-zinc-400 mt-1">
-                  {jobs.length > 0
-                    ? `${jobs.length} target role(s) configured.`
-                    : "Paste a target job description for targeted matching."}
-                </p>
-                <Link
-                  href="/job-description"
-                  className="mt-2.5 inline-flex items-center gap-1 text-xs font-semibold text-violet-400 hover:text-violet-300"
-                >
-                  {jobs.length > 0 ? "Manage Target Jobs" : "Add Target Job"}
+              <div>
+                <h4 className="text-sm font-semibold text-slate-200">Configure Target Job</h4>
+                <p className="text-xs text-slate-400 mt-1 mb-2">Paste a job description you want to practice for.</p>
+                <Link href="/job-description" className="text-xs text-indigo-400 hover:text-indigo-300 font-medium inline-flex items-center gap-1">
+                  {jobs.length > 0 ? "Manage Jobs" : "Add Target Job"}
                   <ArrowRight className="h-3 w-3" />
                 </Link>
               </div>
             </div>
 
-            <div className="border-t border-zinc-900" />
+            <div className="border-t border-slate-800"></div>
 
-            {/* Step 3: Launch Interview */}
-            <div className="flex items-start gap-3.5">
-              <div className="p-2 rounded-lg bg-violet-500/10 border border-violet-500/20 text-violet-400 shrink-0 mt-0.5">
-                <Play className="h-4 w-4" />
+            {/* Step 3 */}
+            <div className="flex gap-4">
+              <div className="shrink-0 pt-1">
+                <div className="w-6 h-6 rounded-full bg-indigo-500/20 flex items-center justify-center">
+                  <Play className="h-3 w-3 text-indigo-400 ml-0.5" />
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <h5 className="text-sm font-semibold text-[var(--foreground)]">3. Start AI Simulation</h5>
-                <p className="text-xs text-zinc-400 mt-1">
-                  Generate structured interview questions and receive feedback.
-                </p>
-                <Link
-                  href="/interview"
-                  className="mt-3 flex items-center justify-center gap-1.5 w-full py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold text-xs transition-colors shadow-md shadow-violet-600/20"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Launch Mock Track
+              <div>
+                <h4 className="text-sm font-semibold text-slate-200">Start Your Interview</h4>
+                <p className="text-xs text-slate-400 mt-1 mb-3">Begin your AI-powered mock interview session.</p>
+                <Link href="/interview" className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs px-3 py-2 rounded-lg transition-colors inline-flex items-center gap-2">
+                  Launch Interview
                 </Link>
               </div>
             </div>
@@ -416,7 +353,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Delete Confirmation Modal */}
       <ConfirmModal
         isOpen={deleteTargetId !== null}
         onClose={() => setDeleteTargetId(null)}
@@ -426,8 +362,8 @@ export default function DashboardPage() {
             setDeleteTargetId(null);
           }
         }}
-        title={`Delete Interview Session #${deleteTargetId}?`}
-        description="Are you sure you want to delete this mock interview record? All associated questions, candidate answers, and evaluation reports will be permanently removed from database storage."
+        title="Delete Interview Session?"
+        description="Are you sure you want to delete this mock interview record? This action cannot be undone."
         confirmText="Delete Record"
         cancelText="Cancel"
         variant="danger"

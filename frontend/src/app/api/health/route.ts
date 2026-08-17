@@ -4,7 +4,7 @@ export async function GET() {
   return NextResponse.json(
     {
       status: "UP",
-      service: "InterviewForge Frontend",
+      service: "Abhayasa Frontend",
       timestamp: Date.now()
     },
     { status: 200 }

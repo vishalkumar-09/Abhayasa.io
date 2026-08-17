@@ -10,25 +10,33 @@ interface ThemeContextType {
 }
 
 const ThemeContext = createContext<ThemeContextType>({
-  theme: "light",
+  theme: "dark",
   toggleTheme: () => {},
 });
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [theme, setTheme] = useState<Theme>("light");
+  const [theme, setTheme] = useState<Theme>("dark");
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem("interviewforge_theme") as Theme | null;
-    const initialTheme = savedTheme || "light";
+    const savedTheme = (localStorage.getItem("abhayasa_theme") || localStorage.getItem("interviewforge_theme")) as Theme | null;
+    const initialTheme = savedTheme || "dark";
     setTheme(initialTheme);
-    document.documentElement.classList.toggle("light", initialTheme === "light");
+    if (initialTheme === "light") {
+      document.documentElement.classList.add("light");
+    } else {
+      document.documentElement.classList.remove("light");
+    }
   }, []);
 
   const toggleTheme = () => {
     const nextTheme = theme === "dark" ? "light" : "dark";
     setTheme(nextTheme);
-    localStorage.setItem("interviewforge_theme", nextTheme);
-    document.documentElement.classList.toggle("light", nextTheme === "light");
+    localStorage.setItem("abhayasa_theme", nextTheme);
+    if (nextTheme === "light") {
+      document.documentElement.classList.add("light");
+    } else {
+      document.documentElement.classList.remove("light");
+    }
   };
 
   return (

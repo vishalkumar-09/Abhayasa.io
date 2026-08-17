@@ -13,9 +13,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "InterviewForge | AI-Powered Mock Interview Platform",
-  description: "Personalized interview practice, placement roadmaps, and real-time voice simulation for technical candidates.",
+  title: "Abhayasa | AI-Powered Interview Preparation",
+  description: "Practice with an AI interviewer tailored to your resume and target role. Get instant feedback, competency scores, and improvement recommendations.",
 };
+
 
 import Providers from "./providers";
 
@@ -27,7 +28,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} light h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <Providers>{children}</Providers>

@@ -36,24 +36,30 @@ export default function ReportPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["interviews"] });
-      router.push("/dashboard");
+      router.push("/interviews");
     },
   });
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center gap-3">
-        <Loader2 className="h-8 w-8 text-violet-500 animate-spin" />
-        <span className="text-xs text-zinc-400 font-medium">Generating Evaluation Analysis...</span>
+      <div className="min-h-screen bg-[#0a0f1e] flex flex-col items-center justify-center gap-4 text-slate-100">
+        <Loader2 className="h-10 w-10 text-indigo-500 animate-spin" />
+        <span className="text-sm font-medium text-slate-400">Loading report...</span>
       </div>
     );
   }
 
   if (!report) {
     return (
-      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center gap-3 text-center p-6">
-        <h2 className="text-base font-semibold text-white">Evaluation Report Not Available</h2>
-        <p className="text-xs text-zinc-400">Complete an interview session to generate performance feedback.</p>
+      <div className="min-h-screen bg-[#0a0f1e] flex flex-col items-center justify-center gap-4 p-6 text-slate-100">
+        <h2 className="text-xl font-semibold text-slate-100">Report Not Found</h2>
+        <p className="text-sm text-slate-400 mb-4">The requested interview report could not be found.</p>
+        <button
+          onClick={() => router.push("/interviews")}
+          className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm px-4 py-2.5 rounded-lg transition-colors"
+        >
+          Go Back
+        </button>
       </div>
     );
   }
@@ -61,141 +67,152 @@ export default function ReportPage() {
   const overallScore = report.overallScore !== undefined ? Number(report.overallScore) : 0;
   const questions = report.questions || [];
   const competencyBreakdown: { name: string; score: number; evidence?: string }[] = report.competencyBreakdown || [];
-  const readiness: string | null = report.readiness || null;
-  const readinessScore: number = report.readinessScore ?? 0;
+  const missingConcepts: string[] = report.missingConcepts || [];
   const nextInterviewPlan: string[] = report.nextInterviewPlan || [];
 
-  const readinessConfig = {
-    INTERVIEW_READY: { label: "Interview Ready", color: "text-emerald-400", bg: "bg-emerald-400/10 border-emerald-500/20" },
-    NEEDS_IMPROVEMENT: { label: "Needs Improvement", color: "text-amber-400", bg: "bg-amber-400/10 border-amber-500/20" },
-    NOT_READY: { label: "Not Ready", color: "text-red-400", bg: "bg-red-400/10 border-red-500/20" },
-  };
-  const rdConfig = readiness ? readinessConfig[readiness as keyof typeof readinessConfig] : null;
-
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6 md:p-10">
-      <div className="max-w-5xl mx-auto flex flex-col gap-8">
-        {/* Header */}
-        <ReportHeader
-          roleTitle={report.roleTitle}
-          categoryName={report.categoryName}
-          overallScore={overallScore}
-          createdAt={report.createdAt}
-          onDelete={() => setShowDeleteModal(true)}
-        />
+    <div className="min-h-screen bg-[#0a0f1e] text-slate-100 pb-16">
+      <div className="max-w-6xl mx-auto px-6 py-8 flex flex-col lg:flex-row gap-8">
+        
+        {/* Main Content Column */}
+        <div className="flex-1 flex flex-col gap-8 min-w-0">
+          <ReportHeader
+            roleTitle={report.roleTitle}
+            categoryName={report.categoryName}
+            createdAt={report.createdAt}
+            companyName={report.companyName}
+          />
 
-        {/* Summary Card */}
-        <ReportSummaryCard summary={report.summary} />
-
-        {/* Performance Metrics Bar Graphs */}
-        <PerformanceMetricsCard overallScore={overallScore} />
-
-        {/* Readiness Badge */}
-        {rdConfig && (
-          <div className={`rounded-2xl border p-5 flex items-center justify-between gap-4 ${rdConfig.bg}`}>
-            <div>
-              <p className="text-[11px] uppercase tracking-widest text-zinc-500 font-semibold mb-1">Interview Readiness</p>
-              <p className={`text-lg font-bold ${rdConfig.color}`}>{rdConfig.label}</p>
-              <p className="text-xs text-zinc-400 mt-0.5">Based on overall performance across all competencies</p>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-1">
+              <PerformanceMetricsCard
+                overallScore={overallScore}
+                readiness={report.readiness}
+              />
             </div>
-            <div className="flex flex-col items-center gap-1 shrink-0">
-              <div className="relative h-16 w-16">
-                <svg className="h-16 w-16 -rotate-90" viewBox="0 0 36 36">
-                  <circle cx="18" cy="18" r="15.9" fill="none" stroke="#27272a" strokeWidth="3"/>
-                  <circle
-                    cx="18" cy="18" r="15.9" fill="none" strokeWidth="3"
-                    stroke={readiness === 'INTERVIEW_READY' ? '#22c55e' : readiness === 'NOT_READY' ? '#ef4444' : '#f59e0b'}
-                    strokeDasharray={`${readinessScore} 100`}
-                    strokeLinecap="round"
-                  />
-                </svg>
-                <span className={`absolute inset-0 flex items-center justify-center text-sm font-bold ${rdConfig.color}`}>
-                  {readinessScore}
-                </span>
+            <div className="lg:col-span-2">
+              <ReportSummaryCard
+                summary={report.summary}
+                roleTitle={report.roleTitle}
+                categoryName={report.categoryName}
+                createdAt={report.createdAt}
+                readinessScore={report.readinessScore}
+              />
+            </div>
+          </div>
+
+          {competencyBreakdown.length > 0 && (
+            <div className="bg-[#111827] border border-slate-800 rounded-xl p-6">
+              <h2 className="text-lg font-semibold text-slate-100 mb-5">Competency Breakdown</h2>
+              <div className="flex flex-col gap-5">
+                {competencyBreakdown.map((comp, idx) => {
+                  const scoreColor = comp.score >= 80 ? 'bg-emerald-500' : comp.score >= 60 ? 'bg-amber-500' : 'bg-red-500';
+                  return (
+                    <div key={idx} className="flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-slate-200">{comp.name}</span>
+                        <span className="text-sm font-semibold text-slate-300">{comp.score}<span className="text-slate-500 font-normal">/100</span></span>
+                      </div>
+                      <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+                        <div className={`h-full ${scoreColor} rounded-full`} style={{ width: `${comp.score}%` }} />
+                      </div>
+                      {comp.evidence && (
+                        <p className="text-xs text-slate-400 mt-1 italic">{comp.evidence}</p>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-              <span className="text-[10px] text-zinc-500">/ 100</span>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Competency Breakdown */}
-        {competencyBreakdown.length > 0 && (
-          <div className="glass-card rounded-2xl border border-zinc-800/80 p-6">
-            <h3 className="text-sm font-bold text-white mb-4">Competency Breakdown</h3>
-            <div className="flex flex-col gap-3">
-              {competencyBreakdown.map((comp, i) => (
-                <div key={i}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-zinc-300 font-medium">{comp.name}</span>
-                    <span className="text-xs font-bold text-zinc-200">{comp.score}<span className="text-zinc-600">/100</span></span>
-                  </div>
-                  <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all duration-700"
-                      style={{
-                        width: `${comp.score}%`,
-                        background: comp.score >= 75
-                          ? 'linear-gradient(90deg, #22c55e, #16a34a)'
-                          : comp.score >= 50
-                            ? 'linear-gradient(90deg, #a78bfa, #7c3aed)'
-                            : 'linear-gradient(90deg, #ef4444, #dc2626)',
-                      }}
-                    />
-                  </div>
-                  {comp.evidence && (
-                    <p className="text-[10px] text-zinc-500 mt-0.5 italic">&ldquo;{comp.evidence}&rdquo;</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+          <StrengthsWeaknessesGrid
+            strengths={report.strengths || []}
+            weaknesses={report.weaknesses || []}
+          />
 
-        {/* Strengths & Weaknesses Grid */}
-        <StrengthsWeaknessesGrid
-          strengths={report.strengths}
-          weaknesses={report.weaknesses}
-        />
-
-        {/* Prep Steps Checklist */}
-        <PrepStepsChecklist
-          weaknesses={report.weaknesses}
-          recommendations={report.recommendations}
-          strengths={report.strengths}
-        />
-
-        {/* Personalised Next Interview Plan */}
-        {nextInterviewPlan.length > 0 && (
-          <div className="glass-card rounded-2xl border border-zinc-800/80 p-6">
-            <h3 className="text-sm font-bold text-white mb-1">Your Personalised Preparation Plan</h3>
-            <p className="text-[11px] text-zinc-500 mb-4">Specific steps to ace your next interview based on the gaps found today.</p>
-            <ol className="flex flex-col gap-3">
-              {nextInterviewPlan.map((step, i) => (
-                <li key={i} className="flex gap-3">
-                  <span className="shrink-0 h-5 w-5 rounded-full bg-violet-600/20 border border-violet-500/30 flex items-center justify-center text-[10px] font-bold text-violet-300">
-                    {i + 1}
+          {missingConcepts.length > 0 && (
+            <div className="bg-[#111827] border border-slate-800 rounded-xl p-6">
+              <h2 className="text-lg font-semibold text-slate-100 mb-4">Concepts to Study</h2>
+              <div className="flex flex-wrap gap-2">
+                {missingConcepts.map((concept, i) => (
+                  <span key={i} className="inline-flex items-center bg-slate-800 border border-slate-700 text-slate-300 text-xs font-medium px-3 py-1.5 rounded-full">
+                    {concept}
                   </span>
-                  <span className="text-xs text-zinc-300 leading-relaxed">{step}</span>
-                </li>
-              ))}
-            </ol>
-          </div>
-        )}
+                ))}
+              </div>
+            </div>
+          )}
 
-        {/* Question-by-Question Reviews */}
-        <div className="flex flex-col gap-4">
-          <h3 className="text-sm font-bold text-white tracking-wide uppercase text-zinc-400">
-            Question-by-Question Feedback &amp; Critique
-          </h3>
-          <div className="flex flex-col gap-6">
-            {questions.map((q: any, idx: number) => (
-              <QuestionReviewCard key={q.id || idx} question={q} index={idx} />
-            ))}
+          {nextInterviewPlan.length > 0 && (
+            <PrepStepsChecklist
+              plan={nextInterviewPlan}
+            />
+          )}
+
+          <div className="flex flex-col gap-4 mt-2">
+            <h2 className="text-lg font-semibold text-slate-100">Detailed Question Review</h2>
+            <div className="flex flex-col gap-4">
+              {questions.map((q: any, idx: number) => (
+                <QuestionReviewCard key={q.id || idx} question={q} index={idx} />
+              ))}
+            </div>
           </div>
+        </div>
+
+        {/* Right Sidebar */}
+        <div className="w-full lg:w-80 flex flex-col gap-6 shrink-0">
+          <div className="bg-[#111827] border border-slate-800 rounded-xl p-6 flex flex-col gap-4">
+            <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wide">Interview Details</h3>
+            
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Role</span>
+              <span className="text-sm text-slate-300">{report.roleTitle || "Not specified"}</span>
+            </div>
+            
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Company</span>
+              <span className="text-sm text-slate-300">{report.companyName || "Not specified"}</span>
+            </div>
+            
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Type</span>
+              <span className="text-sm text-slate-300">{report.categoryName || "Not specified"}</span>
+            </div>
+            
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Date</span>
+              <span className="text-sm text-slate-300">
+                {report.createdAt ? new Date(report.createdAt).toLocaleDateString() : "Unknown date"}
+              </span>
+            </div>
+            
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Readiness</span>
+              <span className="text-sm text-slate-300">{report.readiness?.replace(/_/g, " ") || "Pending"}</span>
+            </div>
+            
+            <div className="border-t border-slate-800 pt-4 mt-2">
+              <button
+                onClick={() => router.push("/dashboard")}
+                className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-sm px-4 py-2.5 rounded-lg transition-colors text-center"
+              >
+                Back to Dashboard
+              </button>
+            </div>
+          </div>
+
+          {report.recommendations && (
+            <div className="bg-[#111827] border border-slate-800 rounded-xl p-6">
+              <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wide mb-3">Recommendations</h3>
+              <p className="text-sm text-slate-400 leading-relaxed whitespace-pre-wrap">
+                {report.recommendations}
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Delete Confirmation Modal */}
       <ConfirmModal
         isOpen={showDeleteModal}
         title="Delete Interview Record?"
