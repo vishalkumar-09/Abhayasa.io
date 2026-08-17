@@ -9,13 +9,15 @@ interface ReportHeaderProps {
   categoryName?: string;
   createdAt?: string;
   companyName?: string;
+  durationMinutes?: number;
 }
 
 export const ReportHeader: React.FC<ReportHeaderProps> = React.memo(({
-  roleTitle = "Software Engineer",
-  categoryName = "Technical Interview",
+  roleTitle = "Software Mock Interview",
+  categoryName = "Technical",
   createdAt,
-  companyName = "Google"
+  companyName = "Target Role",
+  durationMinutes = 30
 }) => {
   const [copied, setCopied] = React.useState(false);
 
@@ -33,14 +35,14 @@ export const ReportHeader: React.FC<ReportHeaderProps> = React.memo(({
         day: "numeric",
         year: "numeric",
       })
-    : "15 May 2025";
+    : new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
   const formattedTime = createdAt
     ? new Date(createdAt).toLocaleTimeString("en-US", {
         hour: "2-digit",
         minute: "2-digit",
       })
-    : "10:30 AM";
+    : new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 
   return (
     <div className="flex flex-col gap-4 pb-2">
@@ -67,7 +69,7 @@ export const ReportHeader: React.FC<ReportHeaderProps> = React.memo(({
             <span>•</span>
             <span>🕒 {formattedTime}</span>
             <span>•</span>
-            <span>⏱️ 45 Minutes</span>
+            <span>⏱️ {durationMinutes || 30} Minutes</span>
           </div>
         </div>
 

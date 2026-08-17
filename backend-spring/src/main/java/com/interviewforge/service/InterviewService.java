@@ -490,11 +490,45 @@ public class InterviewService {
             }
         }
 
+        String roleTitle = "Software Engineer";
+        String companyName = "Target Role";
+        String difficulty = "MID";
+        Long durationMinutes = 45L;
+
+        if (interview != null) {
+            if (interview.getJobDescription() != null) {
+                if (interview.getJobDescription().getTitle() != null && !interview.getJobDescription().getTitle().isBlank()) {
+                    roleTitle = interview.getJobDescription().getTitle();
+                }
+                if (interview.getJobDescription().getCompanyName() != null && !interview.getJobDescription().getCompanyName().isBlank()) {
+                    companyName = interview.getJobDescription().getCompanyName();
+                }
+            } else if (interview.getInterviewType() != null) {
+                roleTitle = interview.getInterviewType() + " Candidate";
+            }
+
+            if (interview.getInterviewState() != null && !interview.getInterviewState().isBlank()) {
+                try {
+                    InterviewStateSnapshot state = objectMapper.readValue(interview.getInterviewState(), InterviewStateSnapshot.class);
+                    if (state.getCurrentDifficulty() != null) {
+                        difficulty = state.getCurrentDifficulty();
+                    }
+                    if (state.getElapsedMinutes() > 0) {
+                        durationMinutes = state.getElapsedMinutes();
+                    }
+                } catch (Exception ignored) {}
+            }
+        }
+
         return ReportResponse.builder()
                 .id(report.getId())
                 .interviewId(interview != null ? interview.getId() : null)
-                .roleTitle(interview != null && interview.getInterviewType() != null ? interview.getInterviewType() + " Interview" : "Technical Mock Interview")
+                .roleTitle(roleTitle)
+                .companyName(companyName)
                 .categoryName(interview != null ? interview.getInterviewType() : "TECHNICAL")
+                .difficulty(difficulty)
+                .experienceLevel("Standard Level")
+                .durationMinutes(durationMinutes)
                 .overallScore(report.getOverallScore())
                 .summary(report.getSummary())
                 .strengths(report.getStrengths())

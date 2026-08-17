@@ -83,10 +83,11 @@ export default function ReportPage() {
         
         {/* Top Header */}
         <ReportHeader
-          roleTitle={report.roleTitle || "Software Engineer"}
-          categoryName={report.categoryName || "Technical Interview"}
+          roleTitle={report.roleTitle}
+          categoryName={report.categoryName}
           createdAt={report.createdAt}
-          companyName={report.companyName || "Google"}
+          companyName={report.companyName}
+          durationMinutes={report.durationMinutes}
         />
 
         {/* Tab Navigation */}
@@ -225,11 +226,15 @@ export default function ReportPage() {
           {/* Right Sidebar (1/3 Width) */}
           <div className="w-full lg:w-80 shrink-0">
             <ReportSidebar
-              roleTitle={report.roleTitle || "Software Engineer"}
-              companyName={report.companyName || "Google"}
-              categoryName={report.categoryName || "Technical Interview"}
-              difficulty={report.difficulty || "Medium"}
+              roleTitle={report.roleTitle}
+              companyName={report.companyName}
+              categoryName={report.categoryName}
+              difficulty={report.difficulty}
               createdAt={report.createdAt}
+              durationMinutes={report.durationMinutes}
+              readiness={report.readiness}
+              summary={report.summary}
+              focusAreas={report.missingConcepts || report.weaknesses}
             />
           </div>
 

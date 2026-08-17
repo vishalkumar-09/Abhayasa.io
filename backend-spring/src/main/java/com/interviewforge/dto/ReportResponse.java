@@ -27,6 +27,11 @@ public class ReportResponse {
     private List<QuestionResponse> questions;
     private LocalDateTime createdAt;
     
+    private String companyName;
+    private String difficulty;
+    private String experienceLevel;
+    private Long durationMinutes;
+
     private String readiness;
     private Integer readinessScore;
     private List<Map<String, Object>> competencyBreakdown;
