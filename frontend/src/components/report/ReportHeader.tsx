@@ -17,6 +17,16 @@ export const ReportHeader: React.FC<ReportHeaderProps> = React.memo(({
   createdAt,
   companyName = "Google"
 }) => {
+  const [copied, setCopied] = React.useState(false);
+
+  const handleShare = () => {
+    if (typeof window !== "undefined") {
+      navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    }
+  };
+
   const formattedDate = createdAt
     ? new Date(createdAt).toLocaleDateString("en-US", {
         month: "short",
@@ -62,22 +72,22 @@ export const ReportHeader: React.FC<ReportHeaderProps> = React.memo(({
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-3 shrink-0 flex-wrap">
+        <div className="flex items-center gap-3 shrink-0 flex-wrap no-print">
           <button 
             onClick={() => window.print()}
-            className="inline-flex items-center gap-2 text-xs font-semibold text-slate-200 bg-slate-900 hover:bg-slate-800 border border-slate-800 px-3.5 py-2 rounded-xl transition-all shadow-sm"
+            className="inline-flex items-center gap-2 text-xs font-semibold text-slate-200 bg-slate-900 hover:bg-slate-800 border border-slate-800 px-3.5 py-2 rounded-xl transition-all shadow-sm active:scale-95"
           >
             <span>📥 Download PDF</span>
           </button>
           <button 
-            onClick={() => navigator.clipboard?.writeText(window.location.href)}
-            className="inline-flex items-center gap-2 text-xs font-semibold text-slate-200 bg-slate-900 hover:bg-slate-800 border border-slate-800 px-3.5 py-2 rounded-xl transition-all shadow-sm"
+            onClick={handleShare}
+            className="inline-flex items-center gap-2 text-xs font-semibold text-slate-200 bg-slate-900 hover:bg-slate-800 border border-slate-800 px-3.5 py-2 rounded-xl transition-all shadow-sm active:scale-95 relative"
           >
-            <span>🔗 Share Report</span>
+            <span>{copied ? "✓ Copied Link!" : "🔗 Share Report"}</span>
           </button>
           <Link
             href="/interview"
-            className="inline-flex items-center gap-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded-xl transition-all shadow-md shadow-indigo-600/20"
+            className="inline-flex items-center gap-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded-xl transition-all shadow-md shadow-indigo-600/20 active:scale-95"
           >
             <span>🎯 Practice Weak Areas</span>
           </Link>

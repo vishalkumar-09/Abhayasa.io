@@ -40,7 +40,7 @@ export const PerformanceMetricsCard: React.FC<PerformanceMetricsCardProps> = Rea
   const percentileOffset = circumference - (percentile / 100) * circumference;
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-5 w-full">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-5 w-full">
       {/* Card 1: Overall Score */}
       <div className="bg-[#111827] border border-slate-800 rounded-2xl p-5 flex flex-col items-center justify-between text-center gap-3 shadow-sm">
         <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wide self-start">Overall Score</h3>
@@ -106,50 +106,6 @@ export const PerformanceMetricsCard: React.FC<PerformanceMetricsCardProps> = Rea
             );
           })}
         </div>
-      </div>
-
-      {/* Card 3: Percentile Rank */}
-      <div className="bg-[#111827] border border-slate-800 rounded-2xl p-5 flex flex-col items-center justify-between text-center gap-3 shadow-sm relative">
-        <div className="flex items-center justify-between w-full">
-          <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wide">Percentile Rank</h3>
-          <span className="text-slate-500 text-xs cursor-pointer hover:text-slate-300" title="Compared to candidates in similar roles">ⓘ</span>
-        </div>
-        
-        <div className="relative flex items-center justify-center my-1">
-          <svg className="w-32 h-32 -rotate-90">
-            <circle
-              cx="64"
-              cy="64"
-              r={radius}
-              stroke="currentColor"
-              strokeWidth="7"
-              fill="transparent"
-              className="text-slate-800/80"
-            />
-            <circle
-              cx="64"
-              cy="64"
-              r={radius}
-              stroke="currentColor"
-              strokeWidth="7"
-              fill="transparent"
-              strokeDasharray={circumference}
-              strokeDashoffset={percentileOffset}
-              strokeLinecap="round"
-              className="text-indigo-500 transition-all duration-700" 
-            />
-          </svg>
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-2xl font-bold text-slate-100">
-              {percentile}<sup>nd</sup>
-            </span>
-            <span className="text-[10px] font-medium text-indigo-300">Percentile</span>
-          </div>
-        </div>
-
-        <p className="text-[11px] text-slate-400 leading-relaxed px-2">
-          You scored better than <strong className="text-slate-200">{percentile}%</strong> of candidates in similar interviews
-        </p>
       </div>
     </div>
   );

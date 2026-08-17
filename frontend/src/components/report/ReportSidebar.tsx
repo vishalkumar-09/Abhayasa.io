@@ -118,48 +118,6 @@ export const ReportSidebar: React.FC<ReportSidebarProps> = React.memo(({
           You have a good grasp of the fundamentals and solved problems effectively. With more practice on system design and communication, you can excel in the upcoming interviews.
         </p>
       </div>
-
-      {/* 4. Next Steps Card */}
-      <div className="bg-[#111827] border border-slate-800 rounded-2xl p-5 flex flex-col gap-3 shadow-sm">
-        <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wide">Next Steps</h3>
-        <div className="flex flex-col gap-2 text-xs font-medium">
-          <button 
-            onClick={() => {
-              const el = document.getElementById("questions-tab");
-              if (el) el.click();
-            }}
-            className="flex items-center justify-between p-2.5 rounded-xl text-slate-300 hover:bg-slate-800/80 transition-colors text-left"
-          >
-            <span className="flex items-center gap-2">
-              <CheckCircle2 className="h-3.5 w-3.5 text-slate-400" />
-              Review your answers
-            </span>
-            <ChevronRight className="h-3.5 w-3.5 text-slate-500" />
-          </button>
-
-          <Link
-            href="/interview"
-            className="flex items-center justify-between p-2.5 rounded-xl bg-indigo-600/10 border border-indigo-500/20 text-indigo-300 font-semibold hover:bg-indigo-600/20 transition-colors"
-          >
-            <span className="flex items-center gap-2">
-              <CheckCircle2 className="h-3.5 w-3.5 text-indigo-400" />
-              Practice weak areas
-            </span>
-            <ChevronRight className="h-3.5 w-3.5 text-indigo-400" />
-          </Link>
-
-          <Link
-            href="/interview"
-            className="flex items-center justify-between p-2.5 rounded-xl text-slate-300 hover:bg-slate-800/80 transition-colors"
-          >
-            <span className="flex items-center gap-2">
-              <CheckCircle2 className="h-3.5 w-3.5 text-slate-400" />
-              Take another mock interview
-            </span>
-            <ChevronRight className="h-3.5 w-3.5 text-slate-500" />
-          </Link>
-        </div>
-      </div>
     </div>
   );
 });

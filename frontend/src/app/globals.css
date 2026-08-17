@@ -357,3 +357,28 @@ body {
 .light .light-logo-show {
   display: block !important;
 }
+
+/* PDF Export & Print Styles */
+@media print {
+  body {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+  }
+  aside, nav, header, .no-print {
+    display: none !important;
+  }
+  .bg-\[\#0a0f1e\], .bg-\[\#111827\], .bg-\[\#0d1525\] {
+    background-color: #ffffff !important;
+    border-color: #e2e8f0 !important;
+    color: #0f172a !important;
+  }
+  .text-slate-100, .text-slate-200, .text-slate-300 {
+    color: #0f172a !important;
+  }
+  .text-slate-400, .text-slate-500 {
+    color: #475569 !important;
+  }
+  .border-slate-800 {
+    border-color: #e2e8f0 !important;
+  }
+}
