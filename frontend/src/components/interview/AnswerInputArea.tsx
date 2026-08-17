@@ -97,16 +97,16 @@ export const AnswerInputArea: React.FC<AnswerInputAreaProps> = React.memo(({
           </button>
           <div className="text-center">
             <p className="text-sm font-medium text-slate-200">
-              {isRecording ? "Listening..." : "Click the microphone to start speaking"}
+              {isRecording ? "🔴 Recording in progress... Click to finish speaking" : "Click the microphone to start voice recording"}
             </p>
             <p className="mt-1 text-xs text-slate-500">
-              Your speech will be transcribed and added to your response.
+              {isRecording ? "Speak clearly into your microphone." : "Your full audio will be transcribed once you finish recording."}
             </p>
           </div>
           {isTranscribingAudio && (
-            <div className="flex items-center gap-2 text-xs font-medium text-indigo-400 mt-2">
+            <div className="flex items-center gap-2 text-xs font-semibold text-indigo-400 mt-2 bg-indigo-500/10 px-3 py-1.5 rounded-full border border-indigo-500/20">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Transcribing audio...
+              Transcribing audio answer...
             </div>
           )}
         </div>

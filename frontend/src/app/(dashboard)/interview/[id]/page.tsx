@@ -102,38 +102,16 @@ export default function LiveInterviewPage() {
   const hasWebSpeechTranscribedRef = useRef<boolean>(false);
   const [isTranscribingAudio, setIsTranscribingAudio] = useState(false);
 
-  // Initialize WebSpeech API on mount
+  // WebSpeech API for speech detection without live text stream override
   useEffect(() => {
     if (typeof window !== "undefined") {
       const SpeechRecognition =
         (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (SpeechRecognition) {
         const recog = new SpeechRecognition();
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        recog.continuous = !isMobile;
-        recog.interimResults = true;
+        recog.continuous = true;
+        recog.interimResults = false;
         recog.lang = "en-US";
-
-        recog.onresult = (event: any) => {
-          let spoken = "";
-          for (let i = 0; i < event.results.length; i++) {
-            spoken += event.results[i][0].transcript;
-          }
-          if (spoken.trim()) {
-            hasWebSpeechTranscribedRef.current = true;
-          }
-          const base = baseAnswerTextRef.current;
-          const updated = base ? base.trim() + " " + spoken.trim() : spoken.trim();
-
-          if (isCodingMode) {
-            setCodeContent((prev) => {
-              const baseCode = prev.split("\n// Spoken explanation:")[0];
-              return baseCode.trim() + `\n// Spoken explanation: ${updated}`;
-            });
-          } else {
-            setAnswerText(updated);
-          }
-        };
 
         recog.onerror = (event: any) => {
           console.error("Speech recognition error:", event.error);
@@ -150,7 +128,7 @@ export default function LiveInterviewPage() {
         setRecognition(recog);
       }
     }
-  }, [isCodingMode]);
+  }, []);
 
   // Fetch interview details
   const { data: interview, isLoading: loadingInterview } = useQuery({
@@ -374,7 +352,7 @@ export default function LiveInterviewPage() {
       };
 
       recorder.onstop = async () => {
-        if ((!hasWebSpeechTranscribedRef.current || !answerText.trim() || !recognition) && audioChunksRef.current.length > 0) {
+        if (audioChunksRef.current.length > 0) {
           setIsTranscribingAudio(true);
           const blobType = recorder.mimeType || "audio/webm";
           const audioBlob = new Blob(audioChunksRef.current, { type: blobType });
