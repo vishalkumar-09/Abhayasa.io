@@ -62,14 +62,22 @@ def extract_json_payload(raw_text: str) -> Any:
 # Provider model definitions prioritized by speed and active API support
 PROVIDER_MODELS = {
     "groq": [
-        "llama-3.3-70b-versatile",
-        "llama-3.1-8b-instant"
+        "groq/compound-mini",
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
+        "qwen/qwen3.6-27b"
     ],
     "gemini": [
         "gemini-flash-lite-latest",
         "gemini-3.1-flash-lite",
         "gemini-2.5-flash",
         "gemini-pro-latest"
+    ],
+    "openrouter": [
+        "nvidia/nemotron-3.5-lightning:free",
+        "nvidia/nemotron-3-super-120b-a12b:free",
+        "openai/gpt-oss-20b:free",
+        "google/gemma-4-31b-it:free"
     ],
     "openai": [
         "gpt-4o-mini",
@@ -93,6 +101,7 @@ class LangChainClient:
 
     def __init__(self):
         self.gemini_keys = parse_keys_list(settings.GEMINI_API_KEY)
+        self.openrouter_keys = parse_keys_list(settings.OPENROUTER_API_KEY)
         self.openai_keys = parse_keys_list(settings.OPENAI_API_KEY)
         self.groq_keys = parse_keys_list(settings.GROQ_API_KEY)
         self.anthropic_keys = parse_keys_list(settings.ANTHROPIC_API_KEY)
@@ -100,25 +109,30 @@ class LangChainClient:
         self._rolling_counter = 0
         self._lock = threading.Lock()
         
-        # Build active provider-model-key tuples prioritizing ultra-fast Groq and OpenAI
+        # Build active provider-model-key tuples prioritizing ultra-fast Groq, Gemini, and OpenRouter
         self.active_pool: List[Tuple[str, str, str]] = []
 
-        # 1. Register Groq (Inference speed ~200ms)
+        # 1. Register Groq
         for k in self.groq_keys:
             for m in PROVIDER_MODELS["groq"]:
                 self.active_pool.append(("groq", m, k))
 
-        # 2. Register OpenAI (Latency ~500ms)
-        for k in self.openai_keys:
-            for m in PROVIDER_MODELS["openai"]:
-                self.active_pool.append(("openai", m, k))
-
-        # 3. Register Gemini
+        # 2. Register Gemini
         for k in self.gemini_keys:
             for m in PROVIDER_MODELS["gemini"]:
                 self.active_pool.append(("gemini", m, k))
 
-        # 4. Register Anthropic
+        # 3. Register OpenRouter (Access 20+ free high-tier models)
+        for k in self.openrouter_keys:
+            for m in PROVIDER_MODELS["openrouter"]:
+                self.active_pool.append(("openrouter", m, k))
+
+        # 4. Register OpenAI
+        for k in self.openai_keys:
+            for m in PROVIDER_MODELS["openai"]:
+                self.active_pool.append(("openai", m, k))
+
+        # 5. Register Anthropic
         for k in self.anthropic_keys:
             for m in PROVIDER_MODELS["anthropic"]:
                 self.active_pool.append(("anthropic", m, k))
@@ -137,6 +151,18 @@ class LangChainClient:
             if max_tokens:
                 kw["max_tokens"] = max_tokens
             return ChatGroq(**kw)
+        elif provider == "openrouter":
+            from langchain_openai import ChatOpenAI
+            kw = {
+                "model_name": model_name,
+                "api_key": api_key,
+                "base_url": "https://openrouter.ai/api/v1",
+                "temperature": temperature,
+                "max_retries": 1
+            }
+            if max_tokens:
+                kw["max_tokens"] = max_tokens
+            return ChatOpenAI(**kw)
         elif provider == "openai":
             from langchain_openai import ChatOpenAI
             kw = {"model_name": model_name, "api_key": api_key, "temperature": temperature, "max_retries": 1}

@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     GEMINI_EMBEDDING_MODEL: str = Field(default="models/gemini-embedding-001", validation_alias="GEMINI_EMBEDDING_MODEL")
     
     OPENAI_API_KEY: str = Field(default="", validation_alias="OPENAI_API_KEY")
+    OPENROUTER_API_KEY: str = Field(default="", validation_alias="OPENROUTER_API_KEY")
     GROQ_API_KEY: str = Field(default="", validation_alias="GROQ_API_KEY")
     ANTHROPIC_API_KEY: str = Field(default="", validation_alias="ANTHROPIC_API_KEY")
     
