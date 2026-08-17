@@ -54,20 +54,26 @@ export const QuestionReviewCard: React.FC<QuestionReviewCardProps> = React.memo(
               {question.difficulty || "Medium"}
             </span>
             
-            {answer?.evaluationScore !== undefined && (
-              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${scoreBadgeColor(answer.evaluationScore)}`}>
-                Score: {answer.evaluationScore}/100
-              </span>
-            )}
+            {answer?.evaluationScore !== undefined && (() => {
+              const scoreVal = answer.evaluationScore <= 10 ? answer.evaluationScore * 10 : answer.evaluationScore;
+              return (
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${scoreBadgeColor(scoreVal)}`}>
+                  Score: {scoreVal}/100
+                </span>
+              );
+            })()}
           </div>
         </div>
         
         <div className="text-slate-400 shrink-0 flex items-center gap-2">
-          {answer?.evaluationScore !== undefined && (
-            <span className={`sm:hidden inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${scoreBadgeColor(answer.evaluationScore)}`}>
-              {answer.evaluationScore}/100
-            </span>
-          )}
+          {answer?.evaluationScore !== undefined && (() => {
+            const scoreVal = answer.evaluationScore <= 10 ? answer.evaluationScore * 10 : answer.evaluationScore;
+            return (
+              <span className={`sm:hidden inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${scoreBadgeColor(scoreVal)}`}>
+                {scoreVal}/100
+              </span>
+            );
+          })()}
           {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
         </div>
       </div>
@@ -97,26 +103,26 @@ export const QuestionReviewCard: React.FC<QuestionReviewCardProps> = React.memo(
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="bg-slate-800/30 border border-slate-700 rounded-lg p-3 flex flex-col items-center justify-center gap-1">
                   <span className="text-[10px] uppercase font-semibold text-slate-400">Technical</span>
-                  <span className={`text-lg font-bold px-2 rounded ${scoreColor(answer.technicalScore || 0)}`}>
-                    {answer.technicalScore || 0}/10
+                  <span className={`text-lg font-bold px-2 rounded ${scoreColor(answer.technicalScore > 10 ? Math.round(answer.technicalScore / 10) : (answer.technicalScore || 0))}`}>
+                    {answer.technicalScore || 0}{answer.technicalScore > 10 ? "/100" : "/10"}
                   </span>
                 </div>
                 <div className="bg-slate-800/30 border border-slate-700 rounded-lg p-3 flex flex-col items-center justify-center gap-1">
                   <span className="text-[10px] uppercase font-semibold text-slate-400">Communication</span>
-                  <span className={`text-lg font-bold px-2 rounded ${scoreColor(answer.communicationScore || 0)}`}>
-                    {answer.communicationScore || 0}/10
+                  <span className={`text-lg font-bold px-2 rounded ${scoreColor(answer.communicationScore > 10 ? Math.round(answer.communicationScore / 10) : (answer.communicationScore || 0))}`}>
+                    {answer.communicationScore || 0}{answer.communicationScore > 10 ? "/100" : "/10"}
                   </span>
                 </div>
                 <div className="bg-slate-800/30 border border-slate-700 rounded-lg p-3 flex flex-col items-center justify-center gap-1">
                   <span className="text-[10px] uppercase font-semibold text-slate-400">Depth</span>
-                  <span className={`text-lg font-bold px-2 rounded ${scoreColor(answer.depthScore || 0)}`}>
-                    {answer.depthScore || 0}/10
+                  <span className={`text-lg font-bold px-2 rounded ${scoreColor(answer.depthScore > 10 ? Math.round(answer.depthScore / 10) : (answer.depthScore || 0))}`}>
+                    {answer.depthScore || 0}{answer.depthScore > 10 ? "/100" : "/10"}
                   </span>
                 </div>
                 <div className="bg-slate-800/30 border border-slate-700 rounded-lg p-3 flex flex-col items-center justify-center gap-1">
                   <span className="text-[10px] uppercase font-semibold text-slate-400">Completeness</span>
-                  <span className={`text-lg font-bold px-2 rounded ${scoreColor(answer.completenessScore || 0)}`}>
-                    {answer.completenessScore || 0}/10
+                  <span className={`text-lg font-bold px-2 rounded ${scoreColor(answer.completenessScore > 10 ? Math.round(answer.completenessScore / 10) : (answer.completenessScore || 0))}`}>
+                    {answer.completenessScore || 0}{answer.completenessScore > 10 ? "/100" : "/10"}
                   </span>
                 </div>
               </div>

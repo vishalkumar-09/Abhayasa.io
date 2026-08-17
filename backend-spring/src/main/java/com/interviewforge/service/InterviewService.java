@@ -349,9 +349,21 @@ public class InterviewService {
         }).collect(Collectors.toList());
 
         String jobTitle = interview.getJobDescription() != null ? interview.getJobDescription().getTitle() : null;
-        String companyName = interview.getJobDescription() != null ? interview.getJobDescription().getCompanyName() : null;
+        if (jobTitle == null || jobTitle.isBlank()) {
+            jobTitle = interview.getInterviewType() != null ? (interview.getInterviewType() + " Role") : "Software Engineer";
+        }
+        String companyName = interview.getJobDescription() != null ? interview.getJobDescription().getCompanyName() : "Target Company";
         List<String> resumeSkills = interview.getResume() != null ? interview.getResume().getSkills() : List.of();
+        
         String difficulty = "MID";
+        if (interview.getInterviewState() != null && !interview.getInterviewState().isBlank()) {
+            try {
+                InterviewStateSnapshot state = objectMapper.readValue(interview.getInterviewState(), InterviewStateSnapshot.class);
+                if (state.getCurrentDifficulty() != null) {
+                    difficulty = state.getCurrentDifficulty();
+                }
+            } catch (Exception ignored) {}
+        }
 
         AiServiceClient.ReportGenerationResponse aiReport = aiServiceClient.generateReport(
             answerDetailsList,
@@ -373,6 +385,8 @@ public class InterviewService {
                 .summary(aiReport.getSummary())
                 .strengths(aiReport.getStrengths())
                 .weaknesses(aiReport.getWeaknesses())
+                .missingConcepts(aiReport.getMissingConcepts())
+                .nextInterviewPlan(aiReport.getNextInterviewPlan() != null ? aiReport.getNextInterviewPlan() : aiReport.getImprovementRoadmap())
                 .recommendations(aiReport.getRecommendations())
                 .readiness(aiReport.getReadiness())
                 .readinessScore(aiReport.getReadinessScore())
@@ -533,6 +547,8 @@ public class InterviewService {
                 .summary(report.getSummary())
                 .strengths(report.getStrengths())
                 .weaknesses(report.getWeaknesses())
+                .missingConcepts(report.getMissingConcepts())
+                .nextInterviewPlan(report.getNextInterviewPlan())
                 .recommendations(report.getRecommendations())
                 .questions(questionDtos)
                 .createdAt(report.getCreatedAt())

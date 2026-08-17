@@ -48,6 +48,16 @@ public class Report {
     @Column(name = "competency_breakdown", columnDefinition = "TEXT")
     private String competencyBreakdown;
 
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "report_missing_concepts", joinColumns = @JoinColumn(name = "report_id"))
+    @Column(name = "concept")
+    private List<String> missingConcepts;
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "report_next_plan", joinColumns = @JoinColumn(name = "report_id"))
+    @Column(name = "plan_step")
+    private List<String> nextInterviewPlan;
+
     @Column(name = "readiness", length = 50)
     private String readiness;
 

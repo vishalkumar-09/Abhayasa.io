@@ -23,9 +23,10 @@ class ReportGeneratorService:
             for name, data in competency_scores.items()
         ])
         
-        # 2. Compute overall score
+        # 2. Compute overall score (normalize from 0-10 scale to 0-100 scale)
         all_scores = [a.score for a in request.answers if a.score is not None]
-        overall_score = round(sum(all_scores) / len(all_scores), 2) if all_scores else 0.0
+        raw_avg = (sum(all_scores) / len(all_scores)) if all_scores else 0.0
+        overall_score = round(raw_avg * 10.0, 1) if raw_avg <= 10.0 else round(raw_avg, 1)
         
         # 3. Build QA transcript
         qa_parts = []
@@ -41,11 +42,10 @@ class ReportGeneratorService:
         resume_skills = set(s.lower() for s in (request.resume_skills or []))
         jd_skills = set(kw.lower() for ans in request.answers for kw in (ans.expectedKeywords or []))
         matched_skills = [s for s in resume_skills if any(s in jd.lower() or jd in s for jd in jd_skills)]
-        gap_skills = list(request.resume_skills or [])  # simplified; report prompt will refine
         
         prompt = STRUCTURED_REPORT_PROMPT.format(
             job_title=request.job_title or "Software Engineer",
-            company_name=request.company_name or "the company",
+            company_name=request.company_name or "Target Role",
             interview_type=request.interview_type or "TECHNICAL",
             difficulty=request.difficulty or "MID",
             resume_skills=", ".join((request.resume_skills or [])[:20]),
@@ -57,13 +57,23 @@ class ReportGeneratorService:
         try:
             parsed = langchain_client.generate_interview_report(prompt)
             
-            # Ensure overallScore matches computed value (prevent hallucination)
+            # Ensure overallScore is on 0-100 scale
             parsed.overallScore = overall_score
             
-            # Backfill competencyBreakdown from computed scores if LLM didn't provide
-            if not parsed.competencyBreakdown:
+            # Normalize competencyBreakdown scores to 0-100 scale
+            if parsed.competencyBreakdown:
+                for comp in parsed.competencyBreakdown:
+                    if isinstance(comp, dict) and "score" in comp:
+                        s = comp["score"]
+                        if isinstance(s, (int, float)) and s <= 10:
+                            comp["score"] = int(s * 10)
+            else:
                 parsed.competencyBreakdown = [
-                    {"name": name, "score": int(data["avg"]*10), "evidence": f"{data['count']} questions evaluated"}
+                    {
+                        "name": name, 
+                        "score": int(data["avg"] * 10) if data["avg"] <= 10 else int(data["avg"]), 
+                        "evidence": f"{data['count']} questions evaluated"
+                    }
                     for name, data in competency_scores.items()
                 ]
             
@@ -73,14 +83,14 @@ class ReportGeneratorService:
             
             # Build recommendations string from roadmap
             if not parsed.recommendations:
-                roadmap_str = "\n".join([f"- {item}" for item in parsed.improvementRoadmap])
+                roadmap_str = "\n".join([f"- {item}" for item in (parsed.improvementRoadmap or [])])
                 concepts_str = ", ".join(parsed.missingConcepts or [])
                 parsed.recommendations = f"Missing Concepts: {concepts_str}\n\nActionable Roadmap:\n{roadmap_str}"
             
-            logger.info("Generated evidence-based report. Overall: %.2f, Readiness: %s", overall_score, parsed.readiness)
+            logger.info("Generated evidence-based report. Overall: %.1f, Readiness: %s", overall_score, parsed.readiness)
             return parsed
         except Exception as e:
-            logger.error("Report generation error: %s. Falling back.", str(e))
+            logger.error("Report generation error: %s. Falling back to dynamic evaluator.", str(e))
             return self.get_mock_report(request)
 
     def _compute_competency_scores(self, request: ReportGenerationRequest) -> dict:
