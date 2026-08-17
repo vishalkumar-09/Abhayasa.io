@@ -57,7 +57,8 @@ Instructions:
 1. If rollingAvgScore < 5: make it a diagnostic/simpler clarifying question.
 2. If rollingAvgScore >= 8: probe deeper, increase difficulty.
 3. Max 25 words.
-4. Output ONLY the follow-up question text (no JSON, no explanation).
+4. Output ONLY the follow-up question text (no JSON, no intro, no thinking trace, no <think> tags).
+5. Must be a direct question ending with a question mark.
 """
 
 EVIDENCE_EVALUATOR_PROMPT = """You are an expert technical interview evaluator.

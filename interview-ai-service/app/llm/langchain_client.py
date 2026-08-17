@@ -14,12 +14,32 @@ from app.schemas.report import ReportGenerationResponse
 
 logger = logging.getLogger("app")
 
+def strip_thinking_tokens(raw_text: str) -> str:
+    """Strips <think>...</think> reasoning traces emitted by DeepSeek/Qwen/Nemotron/Groq reasoning models."""
+    if not raw_text:
+        return ""
+    text = str(raw_text).strip()
+    # 1. Remove complete <think>...</think> blocks
+    cleaned = re.sub(r'<think>[\s\S]*?</think>', '', text, flags=re.IGNORECASE).strip()
+    # 2. If <think> was cut off without closing tag
+    if '<think>' in cleaned.lower():
+        parts = re.split(r'</think>', text, flags=re.IGNORECASE)
+        if len(parts) > 1 and parts[-1].strip():
+            cleaned = parts[-1].strip()
+        else:
+            cleaned = ""
+    # 3. Strip common reasoning prefixes
+    cleaned = re.sub(r'^(?:Thinking Process|Here is a thinking process|Let\'s think)[\s\S]*?\n\n', '', cleaned, flags=re.IGNORECASE).strip()
+    return cleaned.strip()
+
 def extract_json_payload(raw_text: str) -> Any:
     """Extracts valid JSON payload from raw LLM output using multi-stage matching."""
     if not raw_text or not raw_text.strip():
         raise ValueError("Empty response from LLM")
     
-    cleaned = raw_text.strip()
+    cleaned = strip_thinking_tokens(raw_text).strip()
+    if not cleaned:
+        cleaned = raw_text.strip()
     
     # 1. Direct JSON parse
     try:
@@ -309,10 +329,16 @@ Resume Text:
             follow_up_number=follow_up_number
         )
         try:
-            res = self.execute_prompt(formatted, temperature=0.7, max_tokens=60)
-            cleaned = res.strip().replace('"', '')
-            # Ensure it's not empty and not identical to any previous follow-up in history
-            if cleaned and len(cleaned) > 10 and not any(cleaned.lower() == h.lower() for h in (history or [])):
+            res = self.execute_prompt(formatted, temperature=0.7, max_tokens=250)
+            cleaned = strip_thinking_tokens(res).strip()
+            # Remove any leading prefixes like "Interviewer:", "Follow-up Question:"
+            cleaned = re.sub(r'^(?:Follow-?up(?:\s*Question)?|Interviewer|Question)\s*:\s*', '', cleaned, flags=re.IGNORECASE).strip()
+            cleaned = cleaned.replace('"', '').replace('`', '').strip()
+            # Remove leading numbers/bullets
+            cleaned = re.sub(r'^\d+\.\s*', '', cleaned).strip()
+
+            # Ensure it's not empty, doesn't have leftover thinking tokens, and is not a duplicate
+            if cleaned and len(cleaned) > 10 and '<think>' not in cleaned.lower() and not any(cleaned.lower() == h.lower() for h in (history or [])):
                 return cleaned
             return self._fallback_followup(safe_question, safe_answer, history, candidate_state)
         except Exception as e:
