@@ -9,7 +9,7 @@ interface QuestionReviewCardProps {
 }
 
 export const QuestionReviewCard: React.FC<QuestionReviewCardProps> = React.memo(({ question, index }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(index === 0);
   const { answer } = question;
 
   const scoreColor = (score: number) => {
@@ -32,31 +32,42 @@ export const QuestionReviewCard: React.FC<QuestionReviewCardProps> = React.memo(
   };
 
   return (
-    <div className="bg-[#111827] border border-slate-800 rounded-xl overflow-hidden flex flex-col">
+    <div className="bg-[#111827] border border-slate-800 rounded-xl overflow-hidden flex flex-col transition-all">
       {/* Header (Clickable) */}
       <div 
-        className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-800/50 transition-colors"
+        className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-800/40 transition-colors gap-4"
         onClick={() => setIsExpanded(!isExpanded)}
       >
-        <div className="flex items-center gap-3 flex-wrap">
-          <span className="text-sm font-semibold text-slate-200 w-6 shrink-0">Q{index + 1}</span>
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <span className="text-sm font-bold text-indigo-400 shrink-0">Q{index + 1}</span>
           
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-800 text-slate-300 border border-slate-700">
-            {question.category || "General"}
+          <span className="text-sm font-medium text-slate-200 truncate flex-1 min-w-0">
+            {question.questionText}
           </span>
           
-          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${getDifficultyColor(question.difficulty)}`}>
-            {question.difficulty || "Medium"}
-          </span>
-          
-          {answer?.evaluationScore !== undefined && (
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${scoreBadgeColor(answer.evaluationScore)}`}>
-              Score: {answer.evaluationScore}/100
+          <div className="hidden sm:flex items-center gap-2 shrink-0">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-800 text-slate-300 border border-slate-700">
+              {question.category || "General"}
             </span>
-          )}
+            
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${getDifficultyColor(question.difficulty)}`}>
+              {question.difficulty || "Medium"}
+            </span>
+            
+            {answer?.evaluationScore !== undefined && (
+              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${scoreBadgeColor(answer.evaluationScore)}`}>
+                Score: {answer.evaluationScore}/100
+              </span>
+            )}
+          </div>
         </div>
         
-        <div className="text-slate-400 shrink-0">
+        <div className="text-slate-400 shrink-0 flex items-center gap-2">
+          {answer?.evaluationScore !== undefined && (
+            <span className={`sm:hidden inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${scoreBadgeColor(answer.evaluationScore)}`}>
+              {answer.evaluationScore}/100
+            </span>
+          )}
           {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
         </div>
       </div>
