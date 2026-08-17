@@ -37,11 +37,7 @@ export default function UploadResumePage() {
     mutationFn: async (file: File) => {
       const formData = new FormData();
       formData.append("file", file);
-      const res = await apiClient.post("/api/v1/resumes/upload", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      });
+      const res = await apiClient.post("/api/v1/resumes/upload", formData);
       return res.data;
     },
     onSuccess: () => {

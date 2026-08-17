@@ -20,12 +20,19 @@ public class FileStorageUtil {
 
     private final Path fileStorageLocation;
 
-    public FileStorageUtil(@Value("${app.upload.dir}") String uploadDir) {
-        this.fileStorageLocation = Paths.get(uploadDir).toAbsolutePath().normalize();
+    public FileStorageUtil(@Value("${app.upload.dir:uploads/resumes}") String uploadDir) {
+        Path path = Paths.get(uploadDir).toAbsolutePath().normalize();
         try {
-            Files.createDirectories(this.fileStorageLocation);
+            Files.createDirectories(path);
+            this.fileStorageLocation = path;
         } catch (Exception ex) {
-            throw new StorageException("Could not create the directory where the uploaded files will be stored.", ex);
+            Path fallback = Paths.get(System.getProperty("java.io.tmpdir"), "uploads", "resumes").toAbsolutePath().normalize();
+            try {
+                Files.createDirectories(fallback);
+                this.fileStorageLocation = fallback;
+            } catch (Exception e) {
+                throw new StorageException("Could not create the directory where uploaded files will be stored.", e);
+            }
         }
     }
 

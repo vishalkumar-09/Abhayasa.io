@@ -24,9 +24,12 @@ public class AiServiceClient {
     private final RestClient restClient;
 
     public AiServiceClient(@Value("${app.ai-service.url}") String aiServiceUrl) {
+        org.springframework.http.client.SimpleClientHttpRequestFactory factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(10000); // 10s connect timeout
+        factory.setReadTimeout(60000);    // 60s read timeout for LLM parsing
         this.restClient = RestClient.builder()
                 .baseUrl(aiServiceUrl)
-                .requestFactory(new org.springframework.http.client.SimpleClientHttpRequestFactory())
+                .requestFactory(factory)
                 .build();
     }
 

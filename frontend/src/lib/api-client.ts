@@ -9,7 +9,7 @@ export const apiClient = axios.create({
   },
 });
 
-// Request Interceptor: Inject JWT token from localStorage
+// Request Interceptor: Inject JWT token from localStorage & handle FormData
 apiClient.interceptors.request.use(
   (config) => {
     if (typeof window !== "undefined") {
@@ -17,6 +17,9 @@ apiClient.interceptors.request.use(
       if (token && config.headers) {
         config.headers.Authorization = `Bearer ${token}`;
       }
+    }
+    if (config.data instanceof FormData && config.headers) {
+      delete config.headers["Content-Type"];
     }
     return config;
   },

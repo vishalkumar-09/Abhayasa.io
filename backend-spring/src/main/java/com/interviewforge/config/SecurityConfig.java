@@ -73,14 +73,17 @@ public class SecurityConfig {
         
         // Dynamically parse allowed origins from environment variables for production
         String allowedOriginsEnv = System.getenv("ALLOWED_ORIGINS");
-        List<String> origins = new java.util.ArrayList<>();
-        origins.add("http://localhost:3000");
         if (allowedOriginsEnv != null && !allowedOriginsEnv.isBlank()) {
+            List<String> origins = new java.util.ArrayList<>();
             for (String origin : allowedOriginsEnv.split(",")) {
-                origins.add(origin.trim());
+                if (!origin.trim().isBlank()) {
+                    origins.add(origin.trim());
+                }
             }
+            configuration.setAllowedOrigins(origins);
+        } else {
+            configuration.setAllowedOriginPatterns(List.of("*"));
         }
-        configuration.setAllowedOrigins(origins);
         
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Cache-Control"));
