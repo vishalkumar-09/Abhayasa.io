@@ -21,19 +21,18 @@ public class FileStorageUtil {
     private final Path fileStorageLocation;
 
     public FileStorageUtil(@Value("${app.upload.dir:uploads/resumes}") String uploadDir) {
-        Path path = Paths.get(uploadDir).toAbsolutePath().normalize();
+        Path location = Paths.get(uploadDir).toAbsolutePath().normalize();
         try {
-            Files.createDirectories(path);
-            this.fileStorageLocation = path;
+            Files.createDirectories(location);
         } catch (Exception ex) {
-            Path fallback = Paths.get(System.getProperty("java.io.tmpdir"), "uploads", "resumes").toAbsolutePath().normalize();
+            location = Paths.get(System.getProperty("java.io.tmpdir"), "uploads", "resumes").toAbsolutePath().normalize();
             try {
-                Files.createDirectories(fallback);
-                this.fileStorageLocation = fallback;
+                Files.createDirectories(location);
             } catch (Exception e) {
                 throw new StorageException("Could not create the directory where uploaded files will be stored.", e);
             }
         }
+        this.fileStorageLocation = location;
     }
 
     public String storeFile(MultipartFile file) {
