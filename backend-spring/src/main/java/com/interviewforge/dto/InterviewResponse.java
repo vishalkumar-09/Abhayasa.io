@@ -20,6 +20,7 @@ public class InterviewResponse {
     private List<QuestionResponse> questions;
     private String interviewType;
     private LocalDateTime createdAt;
+    private java.math.BigDecimal overallScore;
     
     private InterviewStateSnapshot interviewState;
 }

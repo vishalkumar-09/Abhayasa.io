@@ -453,6 +453,13 @@ public class InterviewService {
             }
         }
 
+        java.math.BigDecimal overallScore = null;
+        if (interview.getStatus() == InterviewStatus.COMPLETED) {
+            overallScore = reportRepository.findByInterviewId(interview.getId())
+                    .map(Report::getOverallScore)
+                    .orElse(null);
+        }
+
         return InterviewResponse.builder()
                 .id(interview.getId())
                 .status(interview.getStatus().name())
@@ -461,6 +468,7 @@ public class InterviewService {
                 .questions(questionDtos)
                 .interviewType(interview.getInterviewType())
                 .createdAt(interview.getCreatedAt())
+                .overallScore(overallScore)
                 .interviewState(stateSnapshot)
                 .build();
     }

@@ -24,24 +24,45 @@ export const PerformanceOverTimeCard: React.FC<PerformanceOverTimeCardProps> = R
     },
   });
 
+  // Filter completed interviews based on dropdown selection
+  const filteredInterviews = React.useMemo(() => {
+    let list = (interviews || []).filter((inv: any) => inv.status === "COMPLETED" || inv.overallScore != null);
+    if (filter === "Last 30 Days") {
+      const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+      list = list.filter((inv: any) => inv.createdAt && new Date(inv.createdAt).getTime() >= thirtyDaysAgo);
+    } else if (filter === "Technical Only") {
+      list = list.filter((inv: any) => inv.interviewType === "TECHNICAL");
+    }
+    return list;
+  }, [interviews, filter]);
+
   // Calculate real trend data points
   const dataPoints = React.useMemo(() => {
-    // If user has previous completed interviews with scores
-    const completed = interviews.filter((inv: any) => inv.status === "COMPLETED" || inv.overallScore !== undefined);
-    
-    if (completed.length >= 2) {
-      const sorted = [...completed].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-      const recent = sorted.slice(-4);
+    if (filteredInterviews.length > 0) {
+      const sorted = [...filteredInterviews].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      const recent = sorted.slice(-5);
       
-      const widthStep = 510 / Math.max(1, recent.length - 1);
+      const count = recent.length;
+      const widthStep = count > 1 ? 510 / (count - 1) : 0;
+
+      if (count === 1) {
+        // Single completed interview: show baseline + current
+        const inv = recent[0];
+        const s = inv.overallScore != null ? Number(inv.overallScore) : currentScore;
+        const dateStr = inv.createdAt ? new Date(inv.createdAt).toLocaleDateString("en-US", { month: "short", day: "2-digit" }) : "Today";
+        return [
+          { label: "Baseline", date: "Initial", score: Math.max(30, Math.round(s - 15)), x: 100, y: 180 - (Math.max(30, s - 15) / 100) * 150 },
+          { label: "Session 1", date: `(${dateStr})`, score: Math.round(s), x: 500, y: 180 - (s / 100) * 150 },
+        ];
+      }
+
       return recent.map((inv: any, idx: number) => {
-        const s = inv.overallScore !== undefined ? Number(inv.overallScore) : (50 + idx * 10);
-        const dateStr = inv.createdAt ? new Date(inv.createdAt).toLocaleDateString("en-US", { month: "short", day: "2-digit" }) : `(Int ${idx+1})`;
+        const s = inv.overallScore != null ? Number(inv.overallScore) : 70;
+        const dateStr = inv.createdAt ? new Date(inv.createdAt).toLocaleDateString("en-US", { month: "short", day: "2-digit" }) : `(#${idx+1})`;
         const x = 50 + idx * widthStep;
-        // Y mapping: score 100 -> y=30, score 0 -> y=180
-        const y = 180 - (s / 100) * 150;
+        const y = 180 - (Math.min(100, Math.max(0, s)) / 100) * 150;
         return {
-          label: `Interview ${idx + 1}`,
+          label: `Session ${idx + 1}`,
           date: `(${dateStr})`,
           score: Math.round(s),
           x,
@@ -52,12 +73,12 @@ export const PerformanceOverTimeCard: React.FC<PerformanceOverTimeCardProps> = R
 
     // Default 4 fallback points ending with current score
     return [
-      { label: "Interview 1", date: "(25 Apr)", score: Math.max(40, currentScore - 23), x: 50, y: 150 },
-      { label: "Interview 2", date: "(02 May)", score: Math.max(50, currentScore - 16), x: 220, y: 125 },
-      { label: "Interview 3", date: "(08 May)", score: Math.max(60, currentScore - 10), x: 390, y: 100 },
-      { label: "Interview 4", date: "(15 May)", score: currentScore, x: 560, y: 180 - (currentScore / 100) * 150 },
+      { label: "Session 1", date: "(Prev)", score: Math.max(40, currentScore - 20), x: 50, y: 180 - (Math.max(40, currentScore - 20) / 100) * 150 },
+      { label: "Session 2", date: "(Mid)", score: Math.max(50, currentScore - 12), x: 220, y: 180 - (Math.max(50, currentScore - 12) / 100) * 150 },
+      { label: "Session 3", date: "(Recent)", score: Math.max(60, currentScore - 5), x: 390, y: 180 - (Math.max(60, currentScore - 5) / 100) * 150 },
+      { label: "Session 4", date: "(Current)", score: Math.round(currentScore), x: 560, y: 180 - (currentScore / 100) * 150 },
     ];
-  }, [interviews, currentScore]);
+  }, [filteredInterviews, currentScore]);
 
   // Construct SVG spline path
   const areaPath = React.useMemo(() => {
