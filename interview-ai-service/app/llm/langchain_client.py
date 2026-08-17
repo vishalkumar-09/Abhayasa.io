@@ -317,29 +317,55 @@ Resume Text:
         safe_question = (question_text or "")[:400]
         safe_answer = (answer_text or "")[:600]
         safe_history = "\n".join(history or [])[:300]
-        import json
-        state_json = json.dumps(candidate_state or {"rollingAvgScore": 7.0, "currentDifficulty": "MID"})
-        follow_up_number = len(history) + 1 if history else 1
+        
+        avg_score = 7.0
+        if candidate_state and "rollingAvgScore" in candidate_state:
+            try:
+                avg_score = float(candidate_state["rollingAvgScore"])
+            except Exception:
+                pass
+        
+        if avg_score >= 8.0:
+            target_depth = "PROBE DEEPER (Advanced Architecture / Edge Cases)"
+        elif avg_score < 5.0:
+            target_depth = "DIAGNOSTIC (Simpler Fundamentals / Clarification)"
+        else:
+            target_depth = "STANDARD (Implementation Details / Specific Trade-offs)"
         
         formatted = ADAPTIVE_FOLLOWUP_PROMPT.format(
             question_text=safe_question,
             answer_text=safe_answer,
             history=safe_history if safe_history else "None",
-            candidate_state=state_json,
-            follow_up_number=follow_up_number
+            target_depth=target_depth
         )
         try:
             res = self.execute_prompt(formatted, temperature=0.7, max_tokens=250)
             cleaned = strip_thinking_tokens(res).strip()
-            # Remove any leading prefixes like "Interviewer:", "Follow-up Question:"
-            cleaned = re.sub(r'^(?:Follow-?up(?:\s*Question)?|Interviewer|Question)\s*:\s*', '', cleaned, flags=re.IGNORECASE).strip()
-            cleaned = cleaned.replace('"', '').replace('`', '').strip()
-            # Remove leading numbers/bullets
-            cleaned = re.sub(r'^\d+\.\s*', '', cleaned).strip()
+            
+            # Filter meta commentary lines
+            meta_keywords = ["rollingavgscore", "instruction", "primary question", "candidate answer", "we need to", "thinking process", "target depth", "follow-up number", "let's think", "first follow"]
+            lines = [line.strip() for line in cleaned.split("\n") if line.strip()]
+            clean_lines = [l for l in lines if not any(k in l.lower() for k in meta_keywords)]
+            combined = " ".join(clean_lines).strip()
 
-            # Ensure it's not empty, doesn't have leftover thinking tokens, and is not a duplicate
-            if cleaned and len(cleaned) > 10 and '<think>' not in cleaned.lower() and not any(cleaned.lower() == h.lower() for h in (history or [])):
-                return cleaned
+            # Clean prefixes
+            combined = re.sub(r'^(?:Follow-?up(?:\s*Question)?|Interviewer|Question)\s*:\s*', '', combined, flags=re.IGNORECASE).strip()
+            combined = combined.replace('"', '').replace('`', '').strip()
+            combined = re.sub(r'^\d+\.\s*', '', combined).strip()
+
+            # Extract sentence ending with ? if present
+            questions_found = re.findall(r'[^.!?\n]+\?', combined)
+            if questions_found:
+                q = questions_found[-1].strip()
+                if q and len(q) > 10 and not any(q.lower() == h.lower() for h in (history or [])):
+                    return q
+
+            # Ensure valid question
+            if combined and len(cleaned) > 10 and '<think>' not in combined.lower() and not any(k in combined.lower() for k in meta_keywords) and not any(combined.lower() == h.lower() for h in (history or [])):
+                if not combined.endswith('?'):
+                    combined += '?'
+                return combined
+
             return self._fallback_followup(safe_question, safe_answer, history, candidate_state)
         except Exception as e:
             logger.error("Follow-up generation error: %s", str(e))
