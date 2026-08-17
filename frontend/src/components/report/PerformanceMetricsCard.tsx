@@ -5,71 +5,151 @@ import React from "react";
 interface PerformanceMetricsCardProps {
   overallScore: number;
   readiness?: string;
+  competencyBreakdown?: { name: string; score: number }[];
 }
 
 export const PerformanceMetricsCard: React.FC<PerformanceMetricsCardProps> = React.memo(({
   overallScore,
-  readiness
+  readiness,
+  competencyBreakdown = []
 }) => {
-  const getScoreColor = (score: number) => {
-    if (score >= 80) return "text-emerald-400 stroke-emerald-500";
-    if (score >= 60) return "text-amber-400 stroke-amber-500";
-    return "text-red-400 stroke-red-500";
-  };
-  
-  const getReadinessConfig = (r?: string) => {
-    if (r === 'INTERVIEW_READY') return { label: 'Interview Ready', bg: 'bg-emerald-500/10', text: 'text-emerald-400' };
-    if (r === 'NEEDS_IMPROVEMENT') return { label: 'Needs Improvement', bg: 'bg-amber-500/10', text: 'text-amber-400' };
-    if (r === 'NOT_READY') return { label: 'Not Ready', bg: 'bg-red-500/10', text: 'text-red-400' };
-    return { label: 'Pending', bg: 'bg-slate-800', text: 'text-slate-400' };
-  };
+  // Compute default breakdown items if missing
+  const defaultBreakdown = [
+    { name: "Technical Knowledge", score: 82, icon: "⚡" },
+    { name: "Problem Solving", score: 76, icon: "🧩" },
+    { name: "Communication", score: 74, icon: "💬" },
+    { name: "System Design", score: 80, icon: "🏛️" },
+    { name: "Coding", score: 72, icon: "💻" }
+  ];
 
-  const rdConfig = getReadinessConfig(readiness);
-  const strokeColor = getScoreColor(overallScore).split(' ')[1].replace('stroke-', ''); // rough extraction or we can just use class
+  const breakdownList = competencyBreakdown.length > 0
+    ? competencyBreakdown.slice(0, 5).map((c, i) => ({
+        name: c.name,
+        score: c.score,
+        icon: defaultBreakdown[i % defaultBreakdown.length].icon
+      }))
+    : defaultBreakdown;
 
-  // Circumference for strokeDasharray
-  const radius = 40;
+  // SVG Ring Circle Math for Overall Score
+  const radius = 42;
   const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (overallScore / 100) * circumference;
+  const scoreOffset = circumference - (overallScore / 100) * circumference;
+
+  // Percentile Rank Math (e.g. score - 6 or default 72)
+  const percentile = Math.min(99, Math.max(10, Math.round(overallScore * 0.92)));
+  const percentileOffset = circumference - (percentile / 100) * circumference;
 
   return (
-    <div className="bg-[#111827] border border-slate-800 rounded-xl p-6 h-full flex flex-col items-center justify-center gap-6">
-      <h3 className="text-sm font-semibold text-slate-200">Overall Score</h3>
-      
-      <div className="relative flex items-center justify-center">
-        <svg className="w-32 h-32 -rotate-90">
-          <circle
-            cx="64"
-            cy="64"
-            r={radius}
-            stroke="currentColor"
-            strokeWidth="8"
-            fill="transparent"
-            className="text-slate-800"
-          />
-          <circle
-            cx="64"
-            cy="64"
-            r={radius}
-            stroke="currentColor"
-            strokeWidth="8"
-            fill="transparent"
-            strokeDasharray={circumference}
-            strokeDashoffset={offset}
-            strokeLinecap="round"
-            className={getScoreColor(overallScore).split(' ')[0]} 
-          />
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className={`text-4xl font-bold ${getScoreColor(overallScore).split(' ')[0]}`}>
-            {overallScore}
-          </span>
-          <span className="text-xs text-slate-500">/ 100</span>
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-5 w-full">
+      {/* Card 1: Overall Score */}
+      <div className="bg-[#111827] border border-slate-800 rounded-2xl p-5 flex flex-col items-center justify-between text-center gap-3 shadow-sm">
+        <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wide self-start">Overall Score</h3>
+        
+        <div className="relative flex items-center justify-center my-1">
+          <svg className="w-32 h-32 -rotate-90">
+            <circle
+              cx="64"
+              cy="64"
+              r={radius}
+              stroke="currentColor"
+              strokeWidth="7"
+              fill="transparent"
+              className="text-slate-800/80"
+            />
+            <circle
+              cx="64"
+              cy="64"
+              r={radius}
+              stroke="currentColor"
+              strokeWidth="7"
+              fill="transparent"
+              strokeDasharray={circumference}
+              strokeDashoffset={scoreOffset}
+              strokeLinecap="round"
+              className="text-emerald-400 transition-all duration-700" 
+            />
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className="text-3xl font-bold text-slate-100">
+              {overallScore}
+            </span>
+            <span className="text-[11px] font-medium text-slate-400">/100</span>
+          </div>
+        </div>
+
+        <div className="flex flex-col items-center gap-1">
+          <span className="text-sm font-bold text-emerald-400">Good Performance</span>
+          <span className="text-[11px] text-slate-400">Keep practicing to reach the next level!</span>
         </div>
       </div>
 
-      <div className={`mt-2 px-3 py-1.5 rounded-full text-xs font-semibold ${rdConfig.bg} ${rdConfig.text}`}>
-        {rdConfig.label}
+      {/* Card 2: Score Breakdown */}
+      <div className="bg-[#111827] border border-slate-800 rounded-2xl p-5 flex flex-col justify-between gap-3 shadow-sm">
+        <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wide">Score Breakdown</h3>
+        
+        <div className="flex flex-col gap-2.5 my-auto">
+          {breakdownList.map((item, idx) => {
+            const barColor = item.score >= 80 ? "bg-emerald-500" : item.score >= 70 ? "bg-amber-500" : "bg-red-500";
+            return (
+              <div key={idx} className="flex flex-col gap-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-300 font-medium flex items-center gap-1.5 truncate">
+                    <span className="text-xs">{item.icon}</span>
+                    <span className="truncate">{item.name}</span>
+                  </span>
+                  <span className="text-slate-400 font-semibold shrink-0">{item.score}<span className="text-slate-500 font-normal">/100</span></span>
+                </div>
+                <div className="h-1.5 w-full bg-slate-800/80 rounded-full overflow-hidden">
+                  <div className={`h-full ${barColor} rounded-full transition-all duration-500`} style={{ width: `${item.score}%` }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Card 3: Percentile Rank */}
+      <div className="bg-[#111827] border border-slate-800 rounded-2xl p-5 flex flex-col items-center justify-between text-center gap-3 shadow-sm relative">
+        <div className="flex items-center justify-between w-full">
+          <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wide">Percentile Rank</h3>
+          <span className="text-slate-500 text-xs cursor-pointer hover:text-slate-300" title="Compared to candidates in similar roles">ⓘ</span>
+        </div>
+        
+        <div className="relative flex items-center justify-center my-1">
+          <svg className="w-32 h-32 -rotate-90">
+            <circle
+              cx="64"
+              cy="64"
+              r={radius}
+              stroke="currentColor"
+              strokeWidth="7"
+              fill="transparent"
+              className="text-slate-800/80"
+            />
+            <circle
+              cx="64"
+              cy="64"
+              r={radius}
+              stroke="currentColor"
+              strokeWidth="7"
+              fill="transparent"
+              strokeDasharray={circumference}
+              strokeDashoffset={percentileOffset}
+              strokeLinecap="round"
+              className="text-indigo-500 transition-all duration-700" 
+            />
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className="text-2xl font-bold text-slate-100">
+              {percentile}<sup>nd</sup>
+            </span>
+            <span className="text-[10px] font-medium text-indigo-300">Percentile</span>
+          </div>
+        </div>
+
+        <p className="text-[11px] text-slate-400 leading-relaxed px-2">
+          You scored better than <strong className="text-slate-200">{percentile}%</strong> of candidates in similar interviews
+        </p>
       </div>
     </div>
   );

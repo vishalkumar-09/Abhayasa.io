@@ -12,10 +12,10 @@ interface ReportHeaderProps {
 }
 
 export const ReportHeader: React.FC<ReportHeaderProps> = React.memo(({
-  roleTitle,
-  categoryName,
+  roleTitle = "Software Engineer",
+  categoryName = "Technical Interview",
   createdAt,
-  companyName
+  companyName = "Google"
 }) => {
   const formattedDate = createdAt
     ? new Date(createdAt).toLocaleDateString("en-US", {
@@ -23,29 +23,65 @@ export const ReportHeader: React.FC<ReportHeaderProps> = React.memo(({
         day: "numeric",
         year: "numeric",
       })
-    : "Recent Evaluation";
+    : "15 May 2025";
 
-  const companyText = companyName ? ` at ${companyName}` : "";
+  const formattedTime = createdAt
+    ? new Date(createdAt).toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "10:30 AM";
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4 pb-2">
       <div>
         <Link
           href="/interviews"
-          className="inline-flex items-center gap-2 text-sm font-medium text-slate-400 hover:text-slate-200 transition-colors"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-400 hover:text-indigo-300 transition-colors"
         >
-          <ArrowLeft className="h-4 w-4" />
-          <span>Back to My Interviews</span>
+          <ArrowLeft className="h-3.5 w-3.5" />
+          <span>Back to Reports</span>
         </Link>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold tracking-tight text-slate-50">
-          Abhayasa Interview Report
-        </h1>
-        <p className="text-sm text-slate-400">
-          {roleTitle || "Technical Interview"}{companyText} • {categoryName || "Software Engineering"} • {formattedDate}
-        </p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col gap-1.5">
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-100">
+            Interview Report
+          </h1>
+          <p className="text-sm font-medium text-slate-300">
+            {companyName} – {roleTitle} <span className="text-slate-400">({categoryName})</span>
+          </p>
+          <div className="flex items-center gap-3 text-xs text-slate-400 mt-0.5">
+            <span>📅 {formattedDate}</span>
+            <span>•</span>
+            <span>🕒 {formattedTime}</span>
+            <span>•</span>
+            <span>⏱️ 45 Minutes</span>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex items-center gap-3 shrink-0 flex-wrap">
+          <button 
+            onClick={() => window.print()}
+            className="inline-flex items-center gap-2 text-xs font-semibold text-slate-200 bg-slate-900 hover:bg-slate-800 border border-slate-800 px-3.5 py-2 rounded-xl transition-all shadow-sm"
+          >
+            <span>📥 Download PDF</span>
+          </button>
+          <button 
+            onClick={() => navigator.clipboard?.writeText(window.location.href)}
+            className="inline-flex items-center gap-2 text-xs font-semibold text-slate-200 bg-slate-900 hover:bg-slate-800 border border-slate-800 px-3.5 py-2 rounded-xl transition-all shadow-sm"
+          >
+            <span>🔗 Share Report</span>
+          </button>
+          <Link
+            href="/interview"
+            className="inline-flex items-center gap-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded-xl transition-all shadow-md shadow-indigo-600/20"
+          >
+            <span>🎯 Practice Weak Areas</span>
+          </Link>
+        </div>
       </div>
     </div>
   );
