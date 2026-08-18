@@ -1,4 +1,4 @@
-# InterviewForge AI 🚀
+# Abhayasa.io 
 
 An AI-powered mock interview platform that conducts personalized technical interviews by analyzing a candidate's resume and target job description. The system generates context-aware interview questions, evaluates responses using LLMs, and provides detailed feedback and improvement roadmaps.
 
@@ -8,7 +8,7 @@ An AI-powered mock interview platform that conducts personalized technical inter
 
 Most interview preparation platforms provide generic questions and limited feedback. Candidates often struggle to prepare for interviews tailored to their resume, projects, and target job roles.
 
-**InterviewForge AI** solves this problem by creating personalized interview experiences using Generative AI, Retrieval-Augmented Generation (RAG), and vector search.
+**Abhayasa.io** solves this problem by creating personalized interview experiences using Generative AI, Retrieval-Augmented Generation (RAG), and vector search.
 
 ---
 
@@ -124,7 +124,7 @@ Most interview preparation platforms provide generic questions and limited feedb
 ## 📂 Project Structure
 
 ```text
-InterviewForge/
+Abhayasa.io/
 
 ├── frontend/
 │   ├── src/
@@ -205,7 +205,7 @@ Performance Report
 
 ```bash
 git clone https://github.com/your-username/interviewforge.git
-cd interviewforge
+cd Abhayasa.io
 ```
 
 ### Start PostgreSQL
